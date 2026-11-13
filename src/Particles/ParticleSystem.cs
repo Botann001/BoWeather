@@ -62,6 +62,13 @@ namespace BoWeather.Particles
             set { _enableWindowPhysics = value; }
         }
 
+        private int _taskbarTop = 0;
+        public int TaskbarTop
+        {
+            get { return _taskbarTop; }
+            set { _taskbarTop = value; }
+        }
+
         public ParticleSystem(int screenWidth, int screenHeight)
         {
             _screenWidth = screenWidth;
@@ -211,12 +218,13 @@ namespace BoWeather.Particles
                 }
             }
 
-            UpdateMouseSnowSweep(winMgr, mouseX, mouseY);
+            // Snow scooping is exclusively handled during active snowball rolling, keeping resting snow mounds pristine and pillowy
+            // UpdateMouseSnowSweep(winMgr, mouseX, mouseY);
 
             // Update interactive snowball rolling, dragging, stacking and snowmen!
             if (_currentEffect == EffectType.Snow)
             {
-                _snowballManager.Update(winMgr, mouseX, mouseY, isMouseDown, _screenWidth, _screenHeight, SpawnSnowPuff);
+                _snowballManager.Update(winMgr, mouseX, mouseY, isMouseDown, _screenWidth, _screenHeight, _screenHeight, SpawnSnowPuff);
             }
 
             for (int i = 0; i < _particles.Count; i++)
@@ -342,7 +350,8 @@ namespace BoWeather.Particles
                 }
 
                 // Floor snow collision at bottom of screen
-                if (p.Y > _screenHeight - 14)
+                float floorLevel = _screenHeight - 14;
+                if (p.Y > floorLevel)
                 {
                     if (_currentEffect == EffectType.Snow && winMgr != null && winMgr.FloorSnowPoints != null)
                     {
@@ -521,7 +530,8 @@ namespace BoWeather.Particles
             }
 
             // Sweep on taskbar / floor snow
-            if (winMgr.FloorSnowPoints != null && mouseY >= _screenHeight - 50)
+            float floorLevelSweep = (_taskbarTop > 100 && _taskbarTop < _screenHeight) ? _taskbarTop : _screenHeight;
+            if (winMgr.FloorSnowPoints != null && mouseY >= floorLevelSweep - 45)
             {
                 float step = (float)_screenWidth / (winMgr.FloorSnowPoints.Length - 1);
                 for (int p = 0; p < winMgr.FloorSnowPoints.Length; p++)
@@ -631,19 +641,20 @@ namespace BoWeather.Particles
             }
             if (maxH < 0.5f) return;
 
-            // 2. Smooth heights using 3-point moving average to eliminate any discrete spikes
+            // 2. High-quality 5-point smoothing kernel for a soft, pillowy, natural snow blanket
             float[] smoothH = new float[n];
             for (int i = 0; i < n; i++)
             {
-                float prev = (i > 0) ? heights[i - 1] : heights[i];
-                float next = (i < n - 1) ? heights[i + 1] : heights[i];
-                smoothH[i] = (prev + heights[i] * 2.0f + next) * 0.25f;
+                float p2 = (i > 1) ? heights[i - 2] : heights[i];
+                float p1 = (i > 0) ? heights[i - 1] : heights[i];
+                float c = heights[i];
+                float n1 = (i < n - 1) ? heights[i + 1] : heights[i];
+                float n2 = (i < n - 2) ? heights[i + 2] : heights[i];
+                smoothH[i] = (p2 * 0.10f + p1 * 0.22f + c * 0.36f + n1 * 0.22f + n2 * 0.10f);
             }
 
-            // 3. Top contour: unbroken continuous crest rising UPWARDS above the window ledge
-            List<PointF> topPts = new List<PointF>(n + 4);
-            topPts.Add(new PointF(snowLeft, top));
-
+            // 3. Top contour: smooth continuous crest rising UPWARDS above the window ledge
+            List<PointF> topPts = new List<PointF>(n);
             for (int i = 0; i < n; i++)
             {
                 float x = snowLeft + i * step;
@@ -653,9 +664,9 @@ namespace BoWeather.Particles
                 {
                     // Soft rounded corner fillet at window edges
                     float distEdge = Math.Min(x - snowLeft, (snowLeft + snowWidth) - x);
-                    if (distEdge < 18f)
+                    if (distEdge < 20f)
                     {
-                        float u = distEdge / 18f;
+                        float u = distEdge / 20f;
                         h *= (float)Math.Sin(u * Math.PI * 0.5);
                     }
                 }
@@ -664,42 +675,25 @@ namespace BoWeather.Particles
                 topPts.Add(new PointF(x, top - h));
             }
 
-            topPts.Add(new PointF(snowLeft + snowWidth, top));
+            if (topPts.Count < 2) return;
 
-            // 4. Bottom contour: rests clean and flat on the window ledge, with soft rounded corner fillets
-            List<PointF> botPts = new List<PointF>();
-            int botSteps = Math.Max(12, (int)(snowWidth / 6.0f));
-            float botStep = snowWidth / botSteps;
-
-            for (int s = botSteps; s >= 0; s--)
+            // 4. Fill volumetric gradient (Snowy / KoiArt aesthetic)
+            using (GraphicsPath path = new GraphicsPath())
             {
-                float x = snowLeft + s * botStep;
-                float droop = 0f;
+                path.AddCurve(topPts.ToArray(), 0.32f);
 
                 if (isWindow)
                 {
-                    // Clean flat baseline along window ledge, wrapping gently around corner radius
-                    float distEdge = Math.Min(x - snowLeft, (snowLeft + snowWidth) - x);
-                    if (distEdge < 14f)
-                    {
-                        float u = 1.0f - (distEdge / 14f);
-                        droop = (float)Math.Sin(u * Math.PI * 0.5) * 2.0f;
-                    }
+                    // Perfectly straight flat bottom resting flush against window top ledge
+                    path.AddLine(snowLeft + snowWidth, top, snowLeft, top);
                 }
                 else
                 {
-                    // Extend down past the bottom of the screen for floor snow
-                    droop = 25f;
+                    // Floor snow extends down to screen edge
+                    path.AddLine(snowLeft + snowWidth, top, snowLeft + snowWidth, top + 35f);
+                    path.AddLine(snowLeft + snowWidth, top + 35f, snowLeft, top + 35f);
+                    path.AddLine(snowLeft, top + 35f, snowLeft, top);
                 }
-
-                botPts.Add(new PointF(x, top + droop));
-            }
-
-            // 5. Fill volumetric gradient (Snowy / KoiArt aesthetic)
-            using (GraphicsPath path = new GraphicsPath())
-            {
-                path.AddCurve(topPts.ToArray(), 0.45f);
-                path.AddCurve(botPts.ToArray(), 0.45f);
                 path.CloseFigure();
 
                 float capTop = top - Math.Max(12.0f, maxH);
@@ -724,20 +718,20 @@ namespace BoWeather.Particles
                     }
                 }
 
-                // 6. Volumetric lighting lines
+                // 5. Volumetric lighting lines
                 if (isWindow)
                 {
-                    // Soft cool bottom shadow along the ledge
-                    using (Pen shadowPen = new Pen(Color.FromArgb(65, 135, 165, 195), 1.0f))
+                    // Soft subtle bottom baseline along the ledge
+                    using (Pen shadowPen = new Pen(Color.FromArgb(50, 135, 165, 195), 1.0f))
                     {
-                        g.DrawCurve(shadowPen, botPts.ToArray(), 0.45f);
+                        g.DrawLine(shadowPen, snowLeft + 4f, top + 0.5f, snowLeft + snowWidth - 4f, top + 0.5f);
                     }
                 }
 
                 // Crystalline crest highlight along top ridge
-                using (Pen crestPen = new Pen(Color.FromArgb(240, 255, 255, 255), 1.0f))
+                using (Pen crestPen = new Pen(Color.FromArgb(235, 255, 255, 255), 1.0f))
                 {
-                    g.DrawCurve(crestPen, topPts.ToArray(), 0.45f);
+                    g.DrawCurve(crestPen, topPts.ToArray(), 0.32f);
                 }
             }
         }

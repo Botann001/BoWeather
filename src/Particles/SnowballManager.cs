@@ -88,277 +88,271 @@ namespace BoWeather.Particles
             _isCandidateRolling = false;
         }
 
-        public void Update(WindowManager winMgr, int mouseX, int mouseY, bool isMouseDown, int screenWidth, int screenHeight, Action<float, float, int> onSnowPuff)
+        public Snowball HitTest(float mouseX, float mouseY)
         {
-            bool mouseJustPressed = isMouseDown && !_prevMouseDown;
-            bool mouseJustReleased = !isMouseDown && _prevMouseDown;
-            float mouseDx = (_prevMouseX >= 0) ? (mouseX - _prevMouseX) : 0f;
-            float mouseDy = (_prevMouseY >= 0) ? (mouseY - _prevMouseY) : 0f;
-
-            // 1. Mouse Just Pressed: Check Grab or Candidate Roll
-            if (mouseJustPressed && mouseX >= 0 && mouseY >= 0)
+            for (int i = _snowballs.Count - 1; i >= 0; i--)
             {
-                _draggedBall = null;
-                _rollingBall = null;
-                _isCandidateRolling = false;
-
-                // Check hit on existing snowballs (from top to bottom of list)
-                for (int i = _snowballs.Count - 1; i >= 0; i--)
+                Snowball b = _snowballs[i];
+                RectangleF rect = b.GetBounds();
+                rect.Inflate(12f, 12f);
+                if (rect.Contains(mouseX, mouseY))
                 {
-                    Snowball b = _snowballs[i];
-                    RectangleF rect = b.GetBounds();
-                    rect.Inflate(10f, 10f); // friendly grab margin
-
-                    if (rect.Contains(mouseX, mouseY))
-                    {
-                        _draggedBall = b;
-                        b.IsGrabbed = true;
-                        b.IsFalling = false;
-                        b.AttachedWindow = IntPtr.Zero;
-                        b.GrabOffsetX = mouseX - b.X;
-                        b.GrabOffsetY = mouseY - b.Y;
-                        b.Vx = 0f;
-                        b.Vy = 0f;
-                        break;
-                    }
-                }
-
-                // If not grabbing an existing ball, check if mouse is on a snow surface to roll a new ball
-                if (_draggedBall == null && winMgr != null)
-                {
-                    bool onSnow = false;
-                    // Check floating windows
-                    List<WindowInfo> windows = winMgr.ActiveWindows;
-                    for (int w = 0; w < windows.Count; w++)
-                    {
-                        WindowInfo win = windows[w];
-                        if (win.SnowHeights == null) continue;
-                        Rectangle b = win.Bounds;
-                        if (mouseX >= b.Left && mouseX <= b.Right && mouseY >= b.Top - 25 && mouseY <= b.Top + 15)
-                        {
-                            onSnow = true;
-                            break;
-                        }
-                    }
-
-                    // Check floor / taskbar snow
-                    if (!onSnow && winMgr.FloorSnowPoints != null && mouseY >= screenHeight - 50)
-                    {
-                        onSnow = true;
-                    }
-
-                    if (onSnow)
-                    {
-                        _isCandidateRolling = true;
-                        _rollStartX = mouseX;
-                        _rollStartY = mouseY;
-                    }
+                    return b;
                 }
             }
+            return null;
+        }
 
-            // 2. Mouse Held / Dragging
-            if (isMouseDown && mouseX >= 0 && mouseY >= 0)
+        public void StartDrag(Snowball b, float mouseX, float mouseY)
+        {
+            if (b == null) return;
+            _draggedBall = b;
+            b.IsGrabbed = true;
+            b.IsFalling = false;
+            b.AttachedWindow = IntPtr.Zero;
+            b.GrabOffsetX = mouseX - b.X;
+            b.GrabOffsetY = mouseY - b.Y;
+            b.Vx = 0f;
+            b.Vy = 0f;
+            _prevMouseX = (int)mouseX;
+            _prevMouseY = (int)mouseY;
+        }
+
+        public void StartCandidateRoll(float mouseX, float mouseY)
+        {
+            _draggedBall = null;
+            _rollingBall = null;
+            _isCandidateRolling = true;
+            _rollStartX = mouseX;
+            _rollStartY = mouseY;
+            _prevMouseX = (int)mouseX;
+            _prevMouseY = (int)mouseY;
+        }
+
+        public void ShatterBall(Snowball b, Action<float, float, int> onSnowPuff)
+        {
+            if (b == null) return;
+            if (onSnowPuff != null)
             {
-                if (_draggedBall != null)
+                int count = (b.BallCount >= 3) ? 45 : ((b.BallCount == 2) ? 28 : 18);
+                onSnowPuff(b.X, b.Y, count);
+            }
+            _snowballs.Remove(b);
+            if (_draggedBall == b) _draggedBall = null;
+            if (_rollingBall == b) _rollingBall = null;
+        }
+
+        public void OnMouseMove(float mouseX, float mouseY, WindowManager winMgr, int screenWidth, int floorY, Action<float, float, int> onSnowPuff)
+        {
+            float mouseDx = (_prevMouseX >= 0) ? (mouseX - _prevMouseX) : 0f;
+            float mouseDy = (_prevMouseY >= 0) ? (mouseY - _prevMouseY) : 0f;
+            _prevMouseX = (int)mouseX;
+            _prevMouseY = (int)mouseY;
+
+            if (_draggedBall != null)
+            {
+                _draggedBall.X = mouseX - _draggedBall.GrabOffsetX;
+                _draggedBall.Y = mouseY - _draggedBall.GrabOffsetY;
+                _draggedBall.Vx = mouseDx * 0.85f;
+                _draggedBall.Vy = mouseDy * 0.85f;
+            }
+            else if (_isCandidateRolling)
+            {
+                if (Math.Abs(mouseX - _rollStartX) > 6f)
                 {
-                    _draggedBall.X = mouseX - _draggedBall.GrabOffsetX;
-                    _draggedBall.Y = mouseY - _draggedBall.GrabOffsetY;
-                    _draggedBall.Vx = mouseDx * 0.85f;
-                    _draggedBall.Vy = mouseDy * 0.85f;
-                }
-                else if (_isCandidateRolling)
-                {
-                    // Start rolling once cursor moves horizontally over 6 pixels
-                    if (Math.Abs(mouseX - _rollStartX) > 6f)
-                    {
-                        _isCandidateRolling = false;
-                        float ledgeY = _rollStartY;
-                        IntPtr attachWin = IntPtr.Zero;
-                        WindowInfo candidateWin = null;
+                    _isCandidateRolling = false;
+                    float ledgeY = _rollStartY;
+                    IntPtr attachWin = IntPtr.Zero;
+                    WindowInfo candidateWin = null;
 
-                        if (winMgr != null)
-                        {
-                            List<WindowInfo> windows = winMgr.ActiveWindows;
-                            for (int w = 0; w < windows.Count; w++)
-                            {
-                                WindowInfo win = windows[w];
-                                Rectangle b = win.Bounds;
-                                if (mouseX >= b.Left && mouseX <= b.Right && mouseY >= b.Top - 25 && mouseY <= b.Top + 15)
-                                {
-                                    ledgeY = b.Top;
-                                    attachWin = win.Handle;
-                                    candidateWin = win;
-                                    break;
-                                }
-                            }
-                            if (attachWin == IntPtr.Zero && mouseY >= screenHeight - 50)
-                            {
-                                ledgeY = screenHeight;
-                            }
-                        }
-
-                        Snowball newBall = new Snowball(mouseX, ledgeY - 8f, 8f);
-                        newBall.IsRolling = true;
-                        newBall.IsGrabbed = true;
-                        newBall.AttachedWindow = attachWin;
-                        if (candidateWin != null)
-                        {
-                            newBall.WindowOffsetX = newBall.X - candidateWin.Bounds.Left;
-                            newBall.WindowOffsetY = candidateWin.Bounds.Top - newBall.Y;
-                        }
-                        _snowballs.Add(newBall);
-                        _rollingBall = newBall;
-
-                        if (onSnowPuff != null) onSnowPuff(newBall.X, newBall.Y, 5);
-                    }
-                }
-                else if (_rollingBall != null)
-                {
-                    _rollingBall.X = mouseX;
-                    _rollingBall.Angle += mouseDx * 0.15f;
-
-                    // Grow snowball as it rolls through snow (up to 22px max base size)
-                    if (_rollingBall.Radius < 22f)
-                    {
-                        _rollingBall.Radius += Math.Abs(mouseDx) * 0.14f;
-                        _rollingBall.BaseRadius = _rollingBall.Radius;
-                    }
-
-                    // Keep resting on current surface ledge
                     if (winMgr != null)
                     {
                         List<WindowInfo> windows = winMgr.ActiveWindows;
-                        bool onWin = false;
                         for (int w = 0; w < windows.Count; w++)
                         {
                             WindowInfo win = windows[w];
                             Rectangle b = win.Bounds;
                             if (mouseX >= b.Left && mouseX <= b.Right && mouseY >= b.Top - 35 && mouseY <= b.Top + 20)
                             {
-                                _rollingBall.Y = b.Top - _rollingBall.Radius;
-                                _rollingBall.AttachedWindow = win.Handle;
-                                _rollingBall.WindowOffsetX = _rollingBall.X - b.Left;
-                                _rollingBall.WindowOffsetY = b.Top - _rollingBall.Y;
-                                onWin = true;
-
-                                // Pack snow from ledge into ball!
-                                if (win.SnowHeights != null && win.SnowHeights.Length > 1)
-                                {
-                                    float rel = (mouseX - (b.Left + 3f)) / (b.Width - 6f);
-                                    int col = (int)(rel * (win.SnowHeights.Length - 1));
-                                    if (col >= 0 && col < win.SnowHeights.Length)
-                                    {
-                                        win.SnowHeights[col] = Math.Max(0f, win.SnowHeights[col] - 3.5f);
-                                        if (col > 0) win.SnowHeights[col - 1] = Math.Max(0f, win.SnowHeights[col - 1] - 2.0f);
-                                        if (col < win.SnowHeights.Length - 1) win.SnowHeights[col + 1] = Math.Max(0f, win.SnowHeights[col + 1] - 2.0f);
-                                    }
-                                }
+                                ledgeY = b.Top;
+                                attachWin = win.Handle;
+                                candidateWin = win;
                                 break;
                             }
                         }
-
-                        if (!onWin && mouseY >= screenHeight - 50)
+                        if (attachWin == IntPtr.Zero && mouseY >= floorY - 50)
                         {
-                            _rollingBall.Y = screenHeight - _rollingBall.Radius;
-                            _rollingBall.AttachedWindow = IntPtr.Zero;
-                            _rollingBall.WindowOffsetX = 0f;
-                            _rollingBall.WindowOffsetY = 0f;
-
-                            // Pack snow from floor into ball!
-                            if (winMgr.FloorSnowPoints != null && winMgr.FloorSnowPoints.Length > 1)
-                            {
-                                float rel = (float)mouseX / (screenWidth - 1);
-                                int col = (int)(rel * (winMgr.FloorSnowPoints.Length - 1));
-                                if (col >= 0 && col < winMgr.FloorSnowPoints.Length)
-                                {
-                                    winMgr.FloorSnowPoints[col] = Math.Max(0f, winMgr.FloorSnowPoints[col] - 3.5f);
-                                    if (col > 0) winMgr.FloorSnowPoints[col - 1] = Math.Max(0f, winMgr.FloorSnowPoints[col - 1] - 2.0f);
-                                    if (col < winMgr.FloorSnowPoints.Length - 1) winMgr.FloorSnowPoints[col + 1] = Math.Max(0f, winMgr.FloorSnowPoints[col + 1] - 2.0f);
-                                }
-                            }
+                            ledgeY = floorY;
                         }
                     }
 
-                    if (Math.Abs(mouseDx) > 3f && onSnowPuff != null && _rand.Next(3) == 0)
+                    Snowball newBall = new Snowball(mouseX, ledgeY - 8f, 8f);
+                    newBall.IsRolling = true;
+                    newBall.IsGrabbed = true;
+                    newBall.AttachedWindow = attachWin;
+                    if (candidateWin != null)
                     {
-                        onSnowPuff(_rollingBall.X, _rollingBall.Y + _rollingBall.Radius * 0.7f, 2);
+                        newBall.WindowOffsetX = newBall.X - candidateWin.Bounds.Left;
+                        newBall.WindowOffsetY = candidateWin.Bounds.Top - newBall.Y;
                     }
+                    _snowballs.Add(newBall);
+                    _rollingBall = newBall;
+
+                    if (onSnowPuff != null) onSnowPuff(newBall.X, newBall.Y, 5);
                 }
             }
-
-            // 3. Mouse Just Released
-            if (mouseJustReleased)
+            else if (_rollingBall != null)
             {
-                _isCandidateRolling = false;
+                _rollingBall.X = mouseX;
+                _rollingBall.Angle += mouseDx * 0.15f;
 
-                if (_rollingBall != null)
+                if (_rollingBall.Radius < 22f)
                 {
-                    _rollingBall.IsRolling = false;
-                    _rollingBall.IsGrabbed = false;
-
-                    // Ensure WindowOffsetX and WindowOffsetY are strictly synchronized upon release
-                    if (_rollingBall.AttachedWindow != IntPtr.Zero && winMgr != null)
-                    {
-                        Rectangle curB;
-                        bool dummy;
-                        if (winMgr.TryGetWindowCurrentBounds(_rollingBall.AttachedWindow, out curB, out dummy))
-                        {
-                            _rollingBall.WindowOffsetX = _rollingBall.X - curB.Left;
-                            _rollingBall.WindowOffsetY = curB.Top - _rollingBall.Y;
-                        }
-                    }
-
-                    CheckStacking(_rollingBall, winMgr, onSnowPuff);
-                    _rollingBall = null;
+                    _rollingBall.Radius += Math.Abs(mouseDx) * 0.14f;
+                    _rollingBall.BaseRadius = _rollingBall.Radius;
                 }
 
-                if (_draggedBall != null)
+                if (winMgr != null)
                 {
-                    _draggedBall.IsGrabbed = false;
-                    bool stacked = CheckStacking(_draggedBall, winMgr, onSnowPuff);
-
-                    if (!stacked)
+                    List<WindowInfo> windows = winMgr.ActiveWindows;
+                    bool onWin = false;
+                    for (int w = 0; w < windows.Count; w++)
                     {
-                        // Check if placed directly on or near a window ledge
-                        bool placedOnWin = false;
-                        if (winMgr != null)
+                        WindowInfo win = windows[w];
+                        Rectangle b = win.Bounds;
+                        if (mouseX >= b.Left && mouseX <= b.Right && mouseY >= b.Top - 35 && mouseY <= b.Top + 20)
                         {
-                            List<WindowInfo> windows = winMgr.ActiveWindows;
-                            for (int w = 0; w < windows.Count; w++)
+                            _rollingBall.Y = b.Top - _rollingBall.Radius;
+                            _rollingBall.AttachedWindow = win.Handle;
+                            _rollingBall.WindowOffsetX = _rollingBall.X - b.Left;
+                            _rollingBall.WindowOffsetY = b.Top - _rollingBall.Y;
+                            onWin = true;
+
+                            if (win.SnowHeights != null && win.SnowHeights.Length > 1)
                             {
-                                WindowInfo win = windows[w];
-                                Rectangle r = win.Bounds;
-                                if (_draggedBall.X >= r.Left && _draggedBall.X <= r.Right &&
-                                    _draggedBall.Y >= r.Top - _draggedBall.BaseRadius - 20f &&
-                                    _draggedBall.Y <= r.Top + 15f)
+                                float rel = (mouseX - (b.Left + 3f)) / (b.Width - 6f);
+                                int col = (int)(rel * (win.SnowHeights.Length - 1));
+                                if (col >= 0 && col < win.SnowHeights.Length)
                                 {
-                                    // Placed directly on window ledge!
-                                    _draggedBall.Y = r.Top - _draggedBall.BaseRadius;
-                                    _draggedBall.Vx = 0f;
-                                    _draggedBall.Vy = 0f;
-                                    _draggedBall.IsFalling = false;
-                                    _draggedBall.AttachedWindow = win.Handle;
-                                    _draggedBall.WindowOffsetX = _draggedBall.X - r.Left;
-                                    _draggedBall.WindowOffsetY = r.Top - _draggedBall.Y;
-                                    placedOnWin = true;
-                                    if (onSnowPuff != null) onSnowPuff(_draggedBall.X, _draggedBall.Y + _draggedBall.BaseRadius, 6);
-                                    break;
+                                    win.SnowHeights[col] = Math.Max(0f, win.SnowHeights[col] - 3.5f);
+                                    if (col > 0) win.SnowHeights[col - 1] = Math.Max(0f, win.SnowHeights[col - 1] - 2.0f);
+                                    if (col < win.SnowHeights.Length - 1) win.SnowHeights[col + 1] = Math.Max(0f, win.SnowHeights[col + 1] - 2.0f);
                                 }
                             }
-                        }
-
-                        if (!placedOnWin)
-                        {
-                            // Released in the air: let it fly and fall with gravity!
-                            _draggedBall.IsFalling = true;
-                            _draggedBall.AttachedWindow = IntPtr.Zero;
+                            break;
                         }
                     }
-                    _draggedBall = null;
+
+                    if (!onWin && mouseY >= floorY - 50)
+                    {
+                        _rollingBall.Y = floorY - _rollingBall.Radius;
+                        _rollingBall.AttachedWindow = IntPtr.Zero;
+                        _rollingBall.WindowOffsetX = 0f;
+                        _rollingBall.WindowOffsetY = 0f;
+
+                        if (winMgr.FloorSnowPoints != null && winMgr.FloorSnowPoints.Length > 1)
+                        {
+                            float rel = (float)mouseX / (screenWidth - 1);
+                            int col = (int)(rel * (winMgr.FloorSnowPoints.Length - 1));
+                            if (col >= 0 && col < winMgr.FloorSnowPoints.Length)
+                            {
+                                winMgr.FloorSnowPoints[col] = Math.Max(0f, winMgr.FloorSnowPoints[col] - 3.5f);
+                                if (col > 0) winMgr.FloorSnowPoints[col - 1] = Math.Max(0f, winMgr.FloorSnowPoints[col - 1] - 2.0f);
+                                if (col < winMgr.FloorSnowPoints.Length - 1) winMgr.FloorSnowPoints[col + 1] = Math.Max(0f, winMgr.FloorSnowPoints[col + 1] - 2.0f);
+                            }
+                        }
+                    }
+                }
+
+                if (Math.Abs(mouseDx) > 3f && onSnowPuff != null && _rand.Next(3) == 0)
+                {
+                    onSnowPuff(_rollingBall.X, _rollingBall.Y + _rollingBall.Radius * 0.7f, 2);
                 }
             }
+        }
 
-            // 4. Update Physics & Falling for all snowballs
+        public void OnMouseUp(float mouseX, float mouseY, WindowManager winMgr, int floorY, Action<float, float, int> onSnowPuff)
+        {
+            _isCandidateRolling = false;
+
+            if (_rollingBall != null)
+            {
+                _rollingBall.IsRolling = false;
+                _rollingBall.IsGrabbed = false;
+
+                if (_rollingBall.AttachedWindow != IntPtr.Zero && winMgr != null)
+                {
+                    Rectangle curB;
+                    bool dummy;
+                    if (winMgr.TryGetWindowCurrentBounds(_rollingBall.AttachedWindow, out curB, out dummy))
+                    {
+                        _rollingBall.WindowOffsetX = _rollingBall.X - curB.Left;
+                        _rollingBall.WindowOffsetY = curB.Top - _rollingBall.Y;
+                    }
+                }
+
+                CheckStacking(_rollingBall, winMgr, onSnowPuff);
+                _rollingBall = null;
+            }
+
+            if (_draggedBall != null)
+            {
+                _draggedBall.IsGrabbed = false;
+                bool stacked = CheckStacking(_draggedBall, winMgr, onSnowPuff);
+
+                if (!stacked)
+                {
+                    bool placed = false;
+                    // Check landing on window ledge
+                    if (winMgr != null)
+                    {
+                        List<WindowInfo> windows = winMgr.ActiveWindows;
+                        for (int w = 0; w < windows.Count; w++)
+                        {
+                            WindowInfo win = windows[w];
+                            Rectangle r = win.Bounds;
+                            if (_draggedBall.X >= r.Left && _draggedBall.X <= r.Right &&
+                                _draggedBall.Y >= r.Top - _draggedBall.BaseRadius - 20f &&
+                                _draggedBall.Y <= r.Top + 15f)
+                            {
+                                _draggedBall.Y = r.Top - _draggedBall.BaseRadius;
+                                _draggedBall.Vx = 0f;
+                                _draggedBall.Vy = 0f;
+                                _draggedBall.IsFalling = false;
+                                _draggedBall.AttachedWindow = win.Handle;
+                                _draggedBall.WindowOffsetX = _draggedBall.X - r.Left;
+                                _draggedBall.WindowOffsetY = r.Top - _draggedBall.Y;
+                                placed = true;
+                                if (onSnowPuff != null) onSnowPuff(_draggedBall.X, _draggedBall.Y + _draggedBall.BaseRadius, 6);
+                                break;
+                            }
+                        }
+                    }
+
+                    // Check landing on Taskbar
+                    if (!placed && _draggedBall.Y >= floorY - _draggedBall.BaseRadius - 25f)
+                    {
+                        _draggedBall.Y = floorY - _draggedBall.BaseRadius;
+                        _draggedBall.Vx = 0f;
+                        _draggedBall.Vy = 0f;
+                        _draggedBall.IsFalling = false;
+                        _draggedBall.AttachedWindow = IntPtr.Zero;
+                        placed = true;
+                        if (onSnowPuff != null) onSnowPuff(_draggedBall.X, _draggedBall.Y + _draggedBall.BaseRadius, 6);
+                    }
+
+                    if (!placed)
+                    {
+                        _draggedBall.IsFalling = true;
+                        _draggedBall.AttachedWindow = IntPtr.Zero;
+                    }
+                }
+                _draggedBall = null;
+            }
+        }
+
+        public void UpdatePhysics(WindowManager winMgr, int screenWidth, int screenHeight, int floorY, Action<float, float, int> onSnowPuff)
+        {
             for (int i = _snowballs.Count - 1; i >= 0; i--)
             {
                 Snowball b = _snowballs[i];
@@ -366,15 +360,14 @@ namespace BoWeather.Particles
 
                 if (b.IsFalling)
                 {
-                    b.Vy += 0.9f; // gravity
+                    b.Vy += 0.9f;
                     b.X += b.Vx;
                     b.Y += b.Vy;
                     b.Vx *= 0.98f;
 
-                    // Check violent impact shatter
                     float currentSpeed = (float)Math.Sqrt(b.Vx * b.Vx + b.Vy * b.Vy);
 
-                    // Check landing on window ledges
+                    // 1. Landing on window ledge
                     if (winMgr != null)
                     {
                         List<WindowInfo> windows = winMgr.ActiveWindows;
@@ -385,17 +378,16 @@ namespace BoWeather.Particles
                             if (b.X >= r.Left && b.X <= r.Right)
                             {
                                 float ledgeY = r.Top;
-                                if (b.Y >= ledgeY - b.BaseRadius && (b.Y - b.Vy) <= ledgeY + 12f)
+                                if (b.Y >= ledgeY - b.BaseRadius && (b.Y - b.Vy) <= ledgeY + 14f)
                                 {
-                                    if (currentSpeed > 22.0f)
+                                    // A snowman or stack NEVER shatters from falling!
+                                    if (b.BallCount == 1 && currentSpeed > 38.0f)
                                     {
-                                        // Shatter into snow flurry upon hard throw!
                                         if (onSnowPuff != null) onSnowPuff(b.X, ledgeY, 32);
                                         _snowballs.RemoveAt(i);
                                         break;
                                     }
 
-                                    // Land gracefully on window
                                     b.Y = ledgeY - b.BaseRadius;
                                     b.Vy = 0f;
                                     b.Vx = 0f;
@@ -412,17 +404,18 @@ namespace BoWeather.Particles
                         }
                     }
 
-                    // Check landing on floor / taskbar
-                    if (b.IsFalling && b.Y >= screenHeight - b.BaseRadius - 2f)
+                    // 2. Landing on Taskbar
+                    if (b.IsFalling && b.Y >= floorY - b.BaseRadius - 2f)
                     {
-                        if (currentSpeed > 22.0f)
+                        // A snowman or stack NEVER shatters from falling!
+                        if (b.BallCount == 1 && currentSpeed > 38.0f)
                         {
-                            if (onSnowPuff != null) onSnowPuff(b.X, screenHeight - 10f, 32);
+                            if (onSnowPuff != null) onSnowPuff(b.X, floorY - 5f, 32);
                             _snowballs.RemoveAt(i);
                             continue;
                         }
 
-                        b.Y = screenHeight - b.BaseRadius - 2f;
+                        b.Y = floorY - b.BaseRadius;
                         b.Vy = 0f;
                         b.Vx = 0f;
                         b.IsFalling = false;
@@ -434,7 +427,6 @@ namespace BoWeather.Particles
                 }
                 else if (b.AttachedWindow != IntPtr.Zero && winMgr != null)
                 {
-                    // Track attached window movement
                     Rectangle curBounds;
                     bool hasMoved;
                     if (winMgr.TryGetWindowCurrentBounds(b.AttachedWindow, out curBounds, out hasMoved))
@@ -442,7 +434,6 @@ namespace BoWeather.Particles
                         b.X = curBounds.Left + b.WindowOffsetX;
                         b.Y = curBounds.Top - b.WindowOffsetY;
 
-                        // Check if window is shaken vigorously -> snowballs tumble off downwards!
                         for (int w = 0; w < winMgr.ActiveWindows.Count; w++)
                         {
                             WindowInfo win = winMgr.ActiveWindows[w];
@@ -459,12 +450,47 @@ namespace BoWeather.Particles
                     }
                     else
                     {
-                        // Window closed/minimized -> fall
                         b.AttachedWindow = IntPtr.Zero;
                         b.IsFalling = true;
                     }
                 }
             }
+        }
+
+        public void Update(WindowManager winMgr, int mouseX, int mouseY, bool isMouseDown, int screenWidth, int screenHeight, Action<float, float, int> onSnowPuff)
+        {
+            Update(winMgr, mouseX, mouseY, isMouseDown, screenWidth, screenHeight, screenHeight, onSnowPuff);
+        }
+
+        public void Update(WindowManager winMgr, int mouseX, int mouseY, bool isMouseDown, int screenWidth, int screenHeight, int floorY, Action<float, float, int> onSnowPuff)
+        {
+            bool mouseJustPressed = isMouseDown && !_prevMouseDown;
+            bool mouseJustReleased = !isMouseDown && _prevMouseDown;
+
+            if (mouseJustPressed && mouseX >= 0 && mouseY >= 0)
+            {
+                Snowball hit = HitTest(mouseX, mouseY);
+                if (hit != null)
+                {
+                    StartDrag(hit, mouseX, mouseY);
+                }
+                else
+                {
+                    StartCandidateRoll(mouseX, mouseY);
+                }
+            }
+
+            if (isMouseDown && mouseX >= 0 && mouseY >= 0)
+            {
+                OnMouseMove(mouseX, mouseY, winMgr, screenWidth, floorY, onSnowPuff);
+            }
+
+            if (mouseJustReleased)
+            {
+                OnMouseUp(mouseX, mouseY, winMgr, floorY, onSnowPuff);
+            }
+
+            UpdatePhysics(winMgr, screenWidth, screenHeight, floorY, onSnowPuff);
 
             _prevMouseDown = isMouseDown;
             _prevMouseX = mouseX;
