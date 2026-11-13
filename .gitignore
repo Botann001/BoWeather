@@ -1,0 +1,15 @@
+# Temporary files & logs
+*.tmp
+*.log
+
+# Visual Studio / IDE
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Windows
+Thumbs.db
+[Dd]esktop.ini
