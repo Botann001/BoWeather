@@ -20,13 +20,47 @@ namespace BoWeather
         public float[] SnowHeights;
         public float[] MaxSnowHeights;
         public bool IsFlung;
+
+        public bool HasSnow()
+        {
+            if (SnowHeights == null) return false;
+            for (int i = 0; i < SnowHeights.Length; i++)
+            {
+                if (SnowHeights[i] > 1.2f) return true;
+            }
+            return false;
+        }
+    }
+
+    public class DepartedSnowShelf
+    {
+        public float Left;
+        public float Top;
+        public float Width;
+        public float[] SnowHeights;
+        public float VelocityX;
     }
 
     public class WindowManager
     {
+        private readonly List<DepartedSnowShelf> _departedSnowShelves = new List<DepartedSnowShelf>();
+
+        public List<DepartedSnowShelf> TakeDepartedSnowShelves()
+        {
+            lock (_lock)
+            {
+                if (_departedSnowShelves.Count == 0) return null;
+                List<DepartedSnowShelf> list = new List<DepartedSnowShelf>(_departedSnowShelves);
+                _departedSnowShelves.Clear();
+                return list;
+            }
+        }
         [DllImport("user32.dll")]
         private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
         private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindow(IntPtr hWnd);
 
         [DllImport("user32.dll")]
         private static extern bool IsWindowVisible(IntPtr hWnd);
@@ -108,13 +142,35 @@ namespace BoWeather
         public float[] FloorSnowPoints;
         public float[] MaxFloorSnowPoints;
 
+        public static bool IsWindowAliveAndVisible(IntPtr hWnd)
+        {
+            if (hWnd == IntPtr.Zero) return false;
+            if (!IsWindow(hWnd)) return false;
+            if (!IsWindowVisible(hWnd)) return false;
+            if (IsIconic(hWnd)) return false;
+
+            int cloaked = 0;
+            int hr = DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, out cloaked, sizeof(int));
+            if (hr == 0 && cloaked != 0) return false;
+
+            return true;
+        }
+
         public List<WindowInfo> ActiveWindows
         {
             get
             {
                 lock (_lock)
                 {
-                    return new List<WindowInfo>(_windows);
+                    List<WindowInfo> alive = new List<WindowInfo>(_windows.Count);
+                    for (int i = 0; i < _windows.Count; i++)
+                    {
+                        if (IsWindowAliveAndVisible(_windows[i].Handle))
+                        {
+                            alive.Add(_windows[i]);
+                        }
+                    }
+                    return alive;
                 }
             }
         }
@@ -175,7 +231,42 @@ namespace BoWeather
                 float wave = 17.0f + 3.0f * (float)Math.Sin(t * Math.PI * 3.0) + 1.5f * (float)Math.Cos(t * Math.PI * 6.0);
                 float h = wave * fade;
                 cur.MaxSnowHeights[p] = h;
-                cur.SnowHeights[p] = h;
+                cur.SnowHeights[p] = 0f; // Starts clean! Accumulates naturally from snowfall
+            }
+        }
+
+        private static void ResampleWindowSnow(WindowInfo cur, WindowInfo old)
+        {
+            float w = cur.Bounds.Width;
+            float snowWidth = Math.Max(20f, w - 6f);
+            int pts = Math.Max(35, (int)(snowWidth / 6.0f));
+            cur.SnowHeights = new float[pts];
+            cur.MaxSnowHeights = new float[pts];
+
+            for (int p = 0; p < pts; p++)
+            {
+                float t = (float)p / (pts - 1);
+                float xLocal = t * snowWidth;
+                float distEdge = Math.Min(xLocal, snowWidth - xLocal);
+
+                float fade = 1.0f;
+                if (distEdge < 18f)
+                {
+                    float u = distEdge / 18f;
+                    fade = (float)Math.Sin(u * Math.PI * 0.5);
+                }
+
+                float wave = 17.0f + 3.0f * (float)Math.Sin(t * Math.PI * 3.0) + 1.5f * (float)Math.Cos(t * Math.PI * 6.0);
+                cur.MaxSnowHeights[p] = wave * fade;
+
+                if (old != null && old.SnowHeights != null && old.SnowHeights.Length > 0)
+                {
+                    int oldIdx = (int)(t * (old.SnowHeights.Length - 1));
+                    if (oldIdx >= 0 && oldIdx < old.SnowHeights.Length)
+                    {
+                        cur.SnowHeights[p] = Math.Min(cur.MaxSnowHeights[p], old.SnowHeights[oldIdx]);
+                    }
+                }
             }
         }
 
@@ -223,7 +314,8 @@ namespace BoWeather
                 GetWindowText(hWnd, titleBuffer, titleBuffer.Capacity);
                 string title = titleBuffer.ToString();
                 if (title == "Snap Flyout" || title == "Snap Bar" || title == "DesktopWindowXamlSource" ||
-                    title == "Program Manager" || title == "Task Switching" || title == "Windows Input Experience")
+                    title == "Program Manager" || title == "Task Switching" || title == "Windows Input Experience" ||
+                    title == "Quick settings" || title == "Control Center" || title == "Notification Center")
                 {
                     return true;
                 }
@@ -233,13 +325,14 @@ namespace BoWeather
                 int hr = DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, out cloaked, sizeof(int));
                 if (hr == 0 && cloaked != 0) return true;
 
-                // Skip desktop background, taskbar, snap overlays, edge UI
+                // Skip desktop background, taskbar, snap overlays, edge UI, control center
                 GetClassName(hWnd, classNameBuffer, classNameBuffer.Capacity);
                 string className = classNameBuffer.ToString();
                 if (className == "Progman" || className == "WorkerW" ||
                     className == "Shell_TrayWnd" || className == "Shell_SecondaryTrayWnd" ||
                     className.Contains("Snap") || className.Contains("Flyout") ||
                     className.Contains("Island") || className.Contains("EdgeUi") ||
+                    className.Contains("ControlCenter") || className.Contains("NotificationCenter") ||
                     className == "Windows.UI.Core.CoreWindow")
                 {
                     return true;
@@ -322,6 +415,40 @@ namespace BoWeather
                     prevMap[_windows[i].Handle] = _windows[i];
                 }
 
+                // Check for departed windows (closed, minimized, or occluded) that had accumulated snow!
+                HashSet<IntPtr> scannedHandles = new HashSet<IntPtr>();
+                for (int i = 0; i < scanned.Count; i++)
+                {
+                    scannedHandles.Add(scanned[i].Handle);
+                }
+
+                for (int i = 0; i < _windows.Count; i++)
+                {
+                    WindowInfo oldWin = _windows[i];
+                    if (!scannedHandles.Contains(oldWin.Handle))
+                    {
+                        if (oldWin.SnowHeights != null && oldWin.SnowHeights.Length > 0)
+                        {
+                            float maxH = 0f;
+                            for (int p = 0; p < oldWin.SnowHeights.Length; p++)
+                            {
+                                if (oldWin.SnowHeights[p] > maxH) maxH = oldWin.SnowHeights[p];
+                            }
+
+                            if (maxH > 1.0f)
+                            {
+                                DepartedSnowShelf shelf = new DepartedSnowShelf();
+                                shelf.Left = oldWin.Bounds.Left;
+                                shelf.Top = oldWin.Bounds.Top + 0.5f;
+                                shelf.Width = oldWin.Bounds.Width;
+                                shelf.SnowHeights = (float[])oldWin.SnowHeights.Clone();
+                                shelf.VelocityX = oldWin.VelocityX;
+                                _departedSnowShelves.Add(shelf);
+                            }
+                        }
+                    }
+                }
+
                 for (int i = 0; i < scanned.Count; i++)
                 {
                     WindowInfo cur = scanned[i];
@@ -349,6 +476,10 @@ namespace BoWeather
                         {
                             cur.SnowHeights = old.SnowHeights;
                             cur.MaxSnowHeights = old.MaxSnowHeights;
+                        }
+                        else if (old.SnowHeights != null)
+                        {
+                            ResampleWindowSnow(cur, old);
                         }
                         else
                         {
@@ -404,11 +535,11 @@ namespace BoWeather
                                 int col = (int)(rel * (win.SnowHeights.Length - 1));
                                 if (col >= 0 && col < win.SnowHeights.Length)
                                 {
-                                    AddSnowWindow(win, col, 2.0f);
-                                    if (col > 0) AddSnowWindow(win, col - 1, 1.4f);
-                                    if (col < win.SnowHeights.Length - 1) AddSnowWindow(win, col + 1, 1.4f);
-                                    if (col > 1) AddSnowWindow(win, col - 2, 0.8f);
-                                    if (col < win.SnowHeights.Length - 2) AddSnowWindow(win, col + 2, 0.8f);
+                                    AddSnowWindow(win, col, 1.2f);
+                                    if (col > 0) AddSnowWindow(win, col - 1, 0.8f);
+                                    if (col < win.SnowHeights.Length - 1) AddSnowWindow(win, col + 1, 0.8f);
+                                    if (col > 1) AddSnowWindow(win, col - 2, 0.4f);
+                                    if (col < win.SnowHeights.Length - 2) AddSnowWindow(win, col + 2, 0.4f);
                                 }
                             }
                             return true;

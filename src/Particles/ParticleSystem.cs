@@ -5,6 +5,17 @@ using System.Drawing.Drawing2D;
 
 namespace BoWeather.Particles
 {
+    public class FallingSnowShelf
+    {
+        public float Left;
+        public float Y;
+        public float Width;
+        public float Vy;
+        public float Vx;
+        public float[] SnowHeights;
+        public float Alpha;
+    }
+
     public class ParticleSystem
     {
         private readonly List<Particle> _particles = new List<Particle>();
@@ -20,17 +31,61 @@ namespace BoWeather.Particles
         private int _prevMouseX = -1;
         private int _prevMouseY = -1;
         private readonly SnowballManager _snowballManager = new SnowballManager();
+        private readonly List<FallingSnowShelf> _fallingSnowShelves = new List<FallingSnowShelf>();
 
         public SnowballManager Snowballs { get { return _snowballManager; } }
+
+        private bool _isMeltingSnow = false;
 
         public EffectType CurrentEffect
         {
             get { return _currentEffect; }
             set
             {
-                _currentEffect = value;
-                if (value != EffectType.Snow) _snowballManager.Clear();
-                RebuildParticles();
+                if (_currentEffect != value)
+                {
+                    SwitchEffect(value);
+                }
+            }
+        }
+
+        public void SwitchEffect(EffectType newEffect)
+        {
+            if (_currentEffect == newEffect) return;
+
+            EffectType oldEffect = _currentEffect;
+            _currentEffect = newEffect;
+
+            // 1. Mark existing particles to fade out naturally
+            for (int i = 0; i < _particles.Count; i++)
+            {
+                _particles[i].IsFadingOut = true;
+            }
+
+            // 2. If transitioning away from snow, melt snow mounds smoothly over ~1.5s
+            if (oldEffect == EffectType.Snow)
+            {
+                _isMeltingSnow = true;
+                _snowballManager.StartMelting();
+                _fallingSnowShelves.Clear();
+            }
+            else if (newEffect == EffectType.Snow)
+            {
+                _isMeltingSnow = false;
+            }
+
+            // 3. Spawn incoming weather particles scattered across screen with smooth fade-in
+            float scale = (_screenWidth * _screenHeight) / (1920f * 1080f);
+            if (scale < 1.0f) scale = 1.0f;
+            int count = (int)((int)_density * scale);
+
+            for (int i = 0; i < count; i++)
+            {
+                Particle p = CreateParticle(true, newEffect);
+                p.Alpha = 0.0f;
+                p.TargetAlpha = 1.0f;
+                p.IsFadingOut = false;
+                _particles.Add(p);
             }
         }
 
@@ -99,7 +154,13 @@ namespace BoWeather.Particles
 
         private Particle CreateParticle(bool randomizeY)
         {
+            return CreateParticle(randomizeY, _currentEffect);
+        }
+
+        private Particle CreateParticle(bool randomizeY, EffectType effect)
+        {
             Particle p = new Particle();
+            p.Effect = effect;
             p.X = (float)(_rand.NextDouble() * (_screenWidth + 60) - 30);
             p.Y = randomizeY ? (float)(_rand.NextDouble() * _screenHeight) : (float)(-_rand.Next(10, 80));
             p.PrevY = p.Y;
@@ -112,8 +173,10 @@ namespace BoWeather.Particles
             p.SplashFrame = 0;
             p.Variant = _rand.Next(0, 4);
             p.Alpha = 1.0f;
+            p.TargetAlpha = 1.0f;
+            p.IsFadingOut = false;
 
-            switch (_currentEffect)
+            switch (effect)
             {
                 case EffectType.Sakura:
                     p.Size = (float)(10 + _rand.NextDouble() * 10);
@@ -218,24 +281,188 @@ namespace BoWeather.Particles
                 }
             }
 
+            // Handle departed window snow (from minimized, closed, or closed tabs)
+            if (_currentEffect == EffectType.Snow && _enableWindowPhysics && winMgr != null)
+            {
+                List<DepartedSnowShelf> departed = winMgr.TakeDepartedSnowShelves();
+                if (departed != null)
+                {
+                    for (int d = 0; d < departed.Count; d++)
+                    {
+                        DepartedSnowShelf dep = departed[d];
+                        FallingSnowShelf f = new FallingSnowShelf();
+                        f.Left = dep.Left;
+                        f.Y = dep.Top;
+                        f.Width = dep.Width;
+                        f.SnowHeights = dep.SnowHeights;
+                        f.Vy = 0f;
+                        f.Vx = dep.VelocityX * 0.25f;
+                        f.Alpha = 1.0f;
+                        _fallingSnowShelves.Add(f);
+                    }
+                }
+            }
+
+            // Update falling snow shelves
+            int groundY = (_taskbarTop > 100 && _taskbarTop < _screenHeight) ? _taskbarTop : _screenHeight;
+            for (int i = _fallingSnowShelves.Count - 1; i >= 0; i--)
+            {
+                FallingSnowShelf shelf = _fallingSnowShelves[i];
+                shelf.Vy += 0.9f;
+                shelf.Y += shelf.Vy;
+                shelf.Left += shelf.Vx;
+                shelf.Vx *= 0.98f;
+
+                // Trail falling snowflakes as the shelf drops
+                if (_particles.Count > 0 && _rand.Next(0, 2) == 0)
+                {
+                    int pIdx = _rand.Next(0, Math.Min(35, _particles.Count));
+                    Particle p = _particles[pIdx];
+                    p.X = shelf.Left + (float)_rand.NextDouble() * shelf.Width;
+                    p.Y = shelf.Y - (float)_rand.NextDouble() * 4f;
+                    p.State = ParticleState.Falling;
+                    p.Vy = shelf.Vy * 0.75f + (float)(_rand.NextDouble() * 1.5);
+                    p.Vx = shelf.Vx * 0.5f + (float)((_rand.NextDouble() - 0.5) * 1.2);
+                    p.Alpha = shelf.Alpha;
+                }
+
+                // Check landing on another active floating window below
+                if (winMgr != null)
+                {
+                    List<WindowInfo> windows = winMgr.ActiveWindows;
+                    bool landedOnWin = false;
+                    for (int w = 0; w < windows.Count; w++)
+                    {
+                        WindowInfo targetWin = windows[w];
+                        Rectangle tr = targetWin.Bounds;
+                        if (shelf.Left < tr.Right && (shelf.Left + shelf.Width) > tr.Left)
+                        {
+                            float ledgeY = tr.Top;
+                            if (shelf.Y >= ledgeY - 4f && (shelf.Y - shelf.Vy) <= ledgeY + 14f)
+                            {
+                                if (targetWin.SnowHeights != null && targetWin.SnowHeights.Length > 1 && shelf.SnowHeights.Length > 1)
+                                {
+                                    float targetStep = (tr.Width - 6f) / (targetWin.SnowHeights.Length - 1);
+                                    float shelfStep = shelf.Width / (shelf.SnowHeights.Length - 1);
+                                    for (int p = 0; p < shelf.SnowHeights.Length; p++)
+                                    {
+                                        float h = shelf.SnowHeights[p];
+                                        if (h > 0.5f)
+                                        {
+                                            float colX = shelf.Left + p * shelfStep;
+                                            if (colX >= tr.Left + 3f && colX <= tr.Right - 3f)
+                                            {
+                                                int tCol = (int)((colX - (tr.Left + 3f)) / targetStep);
+                                                if (tCol >= 0 && tCol < targetWin.SnowHeights.Length)
+                                                {
+                                                    targetWin.SnowHeights[tCol] = Math.Min(targetWin.MaxSnowHeights[tCol], targetWin.SnowHeights[tCol] + h * 0.8f);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                int puffPoints = Math.Min(8, Math.Max(3, (int)(shelf.Width / 80f)));
+                                float puffStep = shelf.Width / puffPoints;
+                                for (int k = 0; k < puffPoints; k++)
+                                {
+                                    SpawnSnowPuff(shelf.Left + k * puffStep, ledgeY, 2);
+                                }
+
+                                landedOnWin = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (landedOnWin)
+                    {
+                        _fallingSnowShelves.RemoveAt(i);
+                        continue;
+                    }
+                }
+
+                // Check landing on Taskbar / Floor Snow
+                if (shelf.Y >= groundY - 3f)
+                {
+                    // Transfer snow into floor mounds
+                    if (winMgr != null && winMgr.FloorSnowPoints != null && winMgr.MaxFloorSnowPoints != null)
+                    {
+                        float floorStep = (float)_screenWidth / (winMgr.FloorSnowPoints.Length - 1);
+                        float shelfStep = shelf.Width / Math.Max(1, shelf.SnowHeights.Length - 1);
+
+                        for (int p = 0; p < shelf.SnowHeights.Length; p++)
+                        {
+                            float h = shelf.SnowHeights[p];
+                            if (h > 0.5f)
+                            {
+                                float colX = shelf.Left + p * shelfStep;
+                                if (colX >= 0 && colX < _screenWidth)
+                                {
+                                    int floorCol = (int)(colX / floorStep);
+                                    if (floorCol >= 0 && floorCol < winMgr.FloorSnowPoints.Length)
+                                    {
+                                        winMgr.FloorSnowPoints[floorCol] = Math.Min(winMgr.MaxFloorSnowPoints[floorCol] * 1.6f, winMgr.FloorSnowPoints[floorCol] + h * 0.7f);
+                                        if (floorCol > 0)
+                                            winMgr.FloorSnowPoints[floorCol - 1] = Math.Min(winMgr.MaxFloorSnowPoints[floorCol - 1] * 1.6f, winMgr.FloorSnowPoints[floorCol - 1] + h * 0.4f);
+                                        if (floorCol < winMgr.FloorSnowPoints.Length - 1)
+                                            winMgr.FloorSnowPoints[floorCol + 1] = Math.Min(winMgr.MaxFloorSnowPoints[floorCol + 1] * 1.6f, winMgr.FloorSnowPoints[floorCol + 1] + h * 0.4f);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Snow puff splash on the floor
+                    int puffCount = Math.Min(12, Math.Max(4, (int)(shelf.Width / 60f)));
+                    float puffStep = shelf.Width / puffCount;
+                    for (int k = 0; k < puffCount; k++)
+                    {
+                        float px = shelf.Left + k * puffStep + (float)(_rand.NextDouble() * 10 - 5);
+                        SpawnSnowPuff(px, groundY - 8f, 3);
+                    }
+
+                    _fallingSnowShelves.RemoveAt(i);
+                    continue;
+                }
+            }
+
             // Snow scooping is exclusively handled during active snowball rolling, keeping resting snow mounds pristine and pillowy
             // UpdateMouseSnowSweep(winMgr, mouseX, mouseY);
 
             // Update interactive snowball rolling, dragging, stacking and snowmen!
-            if (_currentEffect == EffectType.Snow)
+            if (_currentEffect == EffectType.Snow || _isMeltingSnow || _snowballManager.Count > 0)
             {
-                _snowballManager.Update(winMgr, mouseX, mouseY, isMouseDown, _screenWidth, _screenHeight, _screenHeight, SpawnSnowPuff);
+                _snowballManager.Update(winMgr, mouseX, mouseY, isMouseDown, _screenWidth, _screenHeight, groundY, SpawnSnowPuff);
             }
 
-            for (int i = 0; i < _particles.Count; i++)
+            for (int i = _particles.Count - 1; i >= 0; i--)
             {
                 Particle p = _particles[i];
+
+                if (p.IsFadingOut)
+                {
+                    p.Alpha -= 0.022f;
+                    if (p.Alpha <= 0f)
+                    {
+                        _particles.RemoveAt(i);
+                        continue;
+                    }
+                }
+                else if (p.Alpha < p.TargetAlpha)
+                {
+                    p.Alpha = Math.Min(p.TargetAlpha, p.Alpha + 0.035f);
+                }
 
                 if (p.State == ParticleState.Splashing)
                 {
                     p.SplashFrame++;
                     if (p.SplashFrame > 8)
                     {
+                        if (p.IsFadingOut)
+                        {
+                            _particles.RemoveAt(i);
+                            continue;
+                        }
                         ResetParticle(p);
                     }
                     continue;
@@ -270,10 +497,18 @@ namespace BoWeather.Particles
 
                     if (p.RestTimer > p.MaxRestTime)
                     {
-                        if (_currentEffect == EffectType.Snow)
+                        if (p.Effect == EffectType.Snow)
                         {
                             p.Alpha -= 0.02f;
-                            if (p.Alpha <= 0f) ResetParticle(p);
+                            if (p.Alpha <= 0f)
+                            {
+                                if (p.IsFadingOut)
+                                {
+                                    _particles.RemoveAt(i);
+                                    continue;
+                                }
+                                ResetParticle(p);
+                            }
                         }
                         else
                         {
@@ -289,7 +524,7 @@ namespace BoWeather.Particles
                 p.FlutterPhase += p.FlutterSpeed;
                 p.Angle += p.AngularSpeed;
 
-                if (_currentEffect == EffectType.Fireflies)
+                if (p.Effect == EffectType.Fireflies)
                 {
                     p.Vx = (float)Math.Cos(p.FlutterPhase * 0.7f) * 1.2f;
                     p.Vy = (float)Math.Sin(p.FlutterPhase * 0.5f) * 1.0f;
@@ -303,14 +538,14 @@ namespace BoWeather.Particles
                     continue;
                 }
 
-                if (_currentEffect == EffectType.Rain)
+                if (p.Effect == EffectType.Rain)
                 {
                     p.X += dynamicWind * 1.8f;
                     p.Y += p.Vy;
                 }
                 else
                 {
-                    float sway = (float)Math.Sin(p.FlutterPhase) * (_currentEffect == EffectType.AutumnLeaves ? 2.2f : 0.8f);
+                    float sway = (float)Math.Sin(p.FlutterPhase) * (p.Effect == EffectType.AutumnLeaves ? 2.2f : 0.8f);
                     p.X += sway + dynamicWind;
                     p.Y += p.Vy;
                 }
@@ -324,15 +559,20 @@ namespace BoWeather.Particles
 
                     if (winMgr.CheckLedgeCollision(p.X, p.Y, p.PrevY, out hitHandle, out winTop, out hitOffsetX))
                     {
-                        if (_currentEffect == EffectType.Rain)
+                        if (p.Effect == EffectType.Rain)
                         {
                             p.State = ParticleState.Splashing;
                             p.Y = winTop - 2;
                             p.SplashFrame = 0;
                             continue;
                         }
-                        else if (_currentEffect == EffectType.Snow)
+                        else if (p.Effect == EffectType.Snow)
                         {
+                            if (p.IsFadingOut)
+                            {
+                                _particles.RemoveAt(i);
+                                continue;
+                            }
                             ResetParticle(p);
                             continue;
                         }
@@ -349,11 +589,11 @@ namespace BoWeather.Particles
                     }
                 }
 
-                // Floor snow collision at bottom of screen
-                float floorLevel = _screenHeight - 14;
+                // Floor snow collision at top edge of taskbar
+                float floorLevel = (_taskbarTop > 100 && _taskbarTop < _screenHeight) ? _taskbarTop : (_screenHeight - 14);
                 if (p.Y > floorLevel)
                 {
-                    if (_currentEffect == EffectType.Snow && winMgr != null && winMgr.FloorSnowPoints != null)
+                    if (p.Effect == EffectType.Snow && winMgr != null && winMgr.FloorSnowPoints != null)
                     {
                         float rel = p.X / _screenWidth;
                         if (rel >= 0f && rel <= 1f)
@@ -369,6 +609,11 @@ namespace BoWeather.Particles
                             }
                         }
                     }
+                    if (p.IsFadingOut)
+                    {
+                        _particles.RemoveAt(i);
+                        continue;
+                    }
                     ResetParticle(p);
                 }
                 else if (p.X < -50)
@@ -383,9 +628,59 @@ namespace BoWeather.Particles
                 }
             }
 
+            // Smoothly melt snow mounds when transitioning away from snow
+            if (_isMeltingSnow)
+            {
+                bool anySnowLeft = false;
+                if (winMgr != null)
+                {
+                    if (winMgr.FloorSnowPoints != null)
+                    {
+                        for (int p = 0; p < winMgr.FloorSnowPoints.Length; p++)
+                        {
+                            if (winMgr.FloorSnowPoints[p] > 0.05f)
+                            {
+                                winMgr.FloorSnowPoints[p] = Math.Max(0f, winMgr.FloorSnowPoints[p] - 0.45f);
+                                anySnowLeft = true;
+                            }
+                            else
+                            {
+                                winMgr.FloorSnowPoints[p] = 0f;
+                            }
+                        }
+                    }
+
+                    List<WindowInfo> windows = winMgr.ActiveWindows;
+                    for (int w = 0; w < windows.Count; w++)
+                    {
+                        WindowInfo win = windows[w];
+                        if (win.SnowHeights != null)
+                        {
+                            for (int p = 0; p < win.SnowHeights.Length; p++)
+                            {
+                                if (win.SnowHeights[p] > 0.05f)
+                                {
+                                    win.SnowHeights[p] = Math.Max(0f, win.SnowHeights[p] - 0.45f);
+                                    anySnowLeft = true;
+                                }
+                                else
+                                {
+                                    win.SnowHeights[p] = 0f;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!anySnowLeft && _snowballManager.Count == 0)
+                {
+                    _isMeltingSnow = false;
+                }
+            }
+
             // Soft natural snow settling during snow weather
             // Gradually restores swept areas over ~3-4 seconds
-            if (_currentEffect == EffectType.Snow && winMgr != null)
+            if (_currentEffect == EffectType.Snow && !_isMeltingSnow && winMgr != null)
             {
                 if (winMgr.FloorSnowPoints != null && winMgr.MaxFloorSnowPoints != null)
                 {
@@ -408,7 +703,7 @@ namespace BoWeather.Particles
                         {
                             if (win.SnowHeights[p] < win.MaxSnowHeights[p])
                             {
-                                win.SnowHeights[p] = Math.Min(win.MaxSnowHeights[p], win.SnowHeights[p] + 0.075f);
+                                win.SnowHeights[p] = Math.Min(win.MaxSnowHeights[p], win.SnowHeights[p] + 0.020f);
                             }
                         }
                     }
@@ -431,46 +726,30 @@ namespace BoWeather.Particles
         {
             if (_currentEffect != EffectType.Snow || win == null || win.SnowHeights == null) return;
 
-            float snowLeft = win.Bounds.Left + 3f;
-            float snowWidth = win.Bounds.Width - 6f;
-            if (snowWidth <= 0f) return;
-            float step = snowWidth / (win.SnowHeights.Length - 1);
-
-            float totalSnowFallen = 0f;
-
-            // 1. Transfer window snow down to the taskbar/floor directly below!
-            if (winMgr.FloorSnowPoints != null && winMgr.MaxFloorSnowPoints != null)
+            float maxH = 0f;
+            for (int p = 0; p < win.SnowHeights.Length; p++)
             {
-                float floorStep = (float)_screenWidth / (winMgr.FloorSnowPoints.Length - 1);
+                if (win.SnowHeights[p] > maxH) maxH = win.SnowHeights[p];
+            }
+            if (maxH <= 0.5f) return;
 
-                for (int p = 0; p < win.SnowHeights.Length; p++)
-                {
-                    float h = win.SnowHeights[p];
-                    if (h > 0.5f)
-                    {
-                        totalSnowFallen += h;
-                        float colX = snowLeft + p * step;
-                        if (colX >= 0 && colX < _screenWidth)
-                        {
-                            int floorCol = (int)(colX / floorStep);
-                            if (floorCol >= 0 && floorCol < winMgr.FloorSnowPoints.Length)
-                            {
-                                // Pile up on taskbar/floor below!
-                                winMgr.FloorSnowPoints[floorCol] = Math.Min(winMgr.MaxFloorSnowPoints[floorCol] * 1.6f, winMgr.FloorSnowPoints[floorCol] + h * 0.7f);
-                                if (floorCol > 0)
-                                    winMgr.FloorSnowPoints[floorCol - 1] = Math.Min(winMgr.MaxFloorSnowPoints[floorCol - 1] * 1.6f, winMgr.FloorSnowPoints[floorCol - 1] + h * 0.4f);
-                                if (floorCol < winMgr.FloorSnowPoints.Length - 1)
-                                    winMgr.FloorSnowPoints[floorCol + 1] = Math.Min(winMgr.MaxFloorSnowPoints[floorCol + 1] * 1.6f, winMgr.FloorSnowPoints[floorCol + 1] + h * 0.4f);
-                            }
-                        }
-                        win.SnowHeights[p] = 0f; // snow cleared from shaken window!
-                    }
-                }
+            FallingSnowShelf shelf = new FallingSnowShelf();
+            shelf.Left = win.Bounds.Left;
+            shelf.Y = win.Bounds.Top + 0.5f;
+            shelf.Width = win.Bounds.Width;
+            shelf.SnowHeights = (float[])win.SnowHeights.Clone();
+            shelf.Vy = (float)(2.0 + _rand.NextDouble() * 1.5);
+            shelf.Vx = win.VelocityX * 0.35f;
+            shelf.Alpha = 1.0f;
+            _fallingSnowShelves.Add(shelf);
+
+            for (int p = 0; p < win.SnowHeights.Length; p++)
+            {
+                win.SnowHeights[p] = 0f; // snow cleared from shaken window!
             }
 
-            // 2. Cascade falling snowflakes showering down from the window towards the floor!
-            // Reusing existing particles from the fixed pool - NO dynamic allocations!
-            if (totalSnowFallen > 2.0f && _particles.Count > 0)
+            // Cascade falling snowflakes showering down from the window towards the floor!
+            if (_particles.Count > 0)
             {
                 int cascadeCount = Math.Min(25, _particles.Count / 3);
                 for (int i = 0; i < cascadeCount; i++)
@@ -480,7 +759,7 @@ namespace BoWeather.Particles
                     p.Y = win.Bounds.Top + (float)_rand.NextDouble() * 4f;
                     p.State = ParticleState.Falling;
                     p.Vy = (float)(4.5 + _rand.NextDouble() * 3.5); // fast downward drop!
-                    p.Vx = (float)((_rand.NextDouble() - 0.5) * 3.0);
+                    p.Vx = win.VelocityX * 0.25f + (float)((_rand.NextDouble() - 0.5) * 3.0);
                     p.Alpha = 1.0f;
                 }
             }
@@ -554,6 +833,7 @@ namespace BoWeather.Particles
 
         private void ResetParticle(Particle p)
         {
+            p.Effect = _currentEffect;
             p.X = (float)(_rand.NextDouble() * (_screenWidth + 60) - 30);
             p.Y = (float)(-_rand.Next(10, 60));
             p.PrevY = p.Y;
@@ -561,15 +841,69 @@ namespace BoWeather.Particles
             p.RestTimer = 0;
             p.SplashFrame = 0;
             p.Alpha = 1.0f;
+            p.TargetAlpha = 1.0f;
+            p.IsFadingOut = false;
             p.MaxRestTime = _rand.Next(200, 500);
+
+            switch (_currentEffect)
+            {
+                case EffectType.Sakura:
+                    p.Size = (float)(10 + _rand.NextDouble() * 10);
+                    p.BaseVy = (float)(1.2 + _rand.NextDouble() * 1.5);
+                    p.Vy = p.BaseVy;
+                    p.Vx = (float)((_rand.NextDouble() - 0.5) * 1.2);
+                    int pinkR = 250 + _rand.Next(0, 6);
+                    int pinkG = 180 + _rand.Next(0, 30);
+                    int pinkB = 200 + _rand.Next(0, 35);
+                    p.Color = Color.FromArgb(215, pinkR, pinkG, pinkB);
+                    break;
+
+                case EffectType.Snow:
+                    p.Size = (float)(2.8 + _rand.NextDouble() * 4.2);
+                    p.BaseVy = (float)(1.2 + _rand.NextDouble() * 1.8);
+                    p.Vy = p.BaseVy;
+                    p.Vx = (float)((_rand.NextDouble() - 0.5) * 0.6);
+                    int alpha = 190 + _rand.Next(0, 65);
+                    p.Color = Color.FromArgb(alpha, 255, 255, 255);
+                    break;
+
+                case EffectType.AutumnLeaves:
+                    p.Size = (float)(14 + _rand.NextDouble() * 12);
+                    p.BaseVy = (float)(1.5 + _rand.NextDouble() * 1.8);
+                    p.Vy = p.BaseVy;
+                    p.Vx = (float)((_rand.NextDouble() - 0.5) * 2.0);
+                    int palette = _rand.Next(0, 4);
+                    if (palette == 0) p.Color = Color.FromArgb(220, 205, 55, 30);
+                    else if (palette == 1) p.Color = Color.FromArgb(220, 235, 120, 25);
+                    else if (palette == 2) p.Color = Color.FromArgb(220, 240, 175, 35);
+                    else p.Color = Color.FromArgb(220, 180, 70, 35);
+                    break;
+
+                case EffectType.Rain:
+                    p.Size = (float)(14 + _rand.NextDouble() * 10);
+                    p.BaseVy = (float)(18.0 + _rand.NextDouble() * 9.0);
+                    p.Vy = p.BaseVy;
+                    p.Vx = 0f;
+                    int rainAlpha = 140 + _rand.Next(0, 80);
+                    p.Color = Color.FromArgb(rainAlpha, 210, 230, 255);
+                    break;
+
+                case EffectType.Fireflies:
+                    p.Size = (float)(6 + _rand.NextDouble() * 5);
+                    p.BaseVy = (float)((_rand.NextDouble() - 0.5) * 0.8);
+                    p.Vy = p.BaseVy;
+                    p.Vx = (float)((_rand.NextDouble() - 0.5) * 0.8);
+                    p.Color = Color.FromArgb(240, 220, 255, 110);
+                    break;
+            }
         }
 
         public void Draw(Graphics g, WindowManager winMgr)
         {
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            // 1. Draw Puffy Snow Caps ONLY on Floating Windows and Floor
-            if (_currentEffect == EffectType.Snow && _enableWindowPhysics && winMgr != null)
+            // 1. Draw Puffy Snow Caps ONLY on Floating Windows, Falling Shelves and Floor
+            if ((_currentEffect == EffectType.Snow || _isMeltingSnow || _snowballManager.Count > 0 || _fallingSnowShelves.Count > 0) && _enableWindowPhysics && winMgr != null)
             {
                 List<WindowInfo> windows = winMgr.ActiveWindows;
                 for (int w = 0; w < windows.Count; w++)
@@ -581,10 +915,18 @@ namespace BoWeather.Particles
                     }
                 }
 
-                // Draw Floor Snow at bottom of screen
+                // Draw Falling Snow Shelves (tumpukan salju yang ikut jatuh saat window diminimize atau ditutup)
+                for (int s = 0; s < _fallingSnowShelves.Count; s++)
+                {
+                    FallingSnowShelf shelf = _fallingSnowShelves[s];
+                    DrawPuffySnowCap(g, shelf.Left, shelf.Y, shelf.Width, shelf.SnowHeights, true, shelf.Alpha);
+                }
+
+                // Draw Floor Snow on top of Taskbar
                 if (winMgr.FloorSnowPoints != null)
                 {
-                    DrawPuffySnowCap(g, 0, _screenHeight, _screenWidth, winMgr.FloorSnowPoints, false);
+                    int floorY = (_taskbarTop > 100 && _taskbarTop < _screenHeight) ? _taskbarTop : _screenHeight;
+                    DrawPuffySnowCap(g, 0, floorY, _screenWidth, winMgr.FloorSnowPoints, false);
                 }
 
                 // Draw Interactive Snowballs and Snowmen!
@@ -602,7 +944,7 @@ namespace BoWeather.Particles
                     continue;
                 }
 
-                switch (_currentEffect)
+                switch (p.Effect)
                 {
                     case EffectType.Sakura:
                         DrawSakuraPetal(g, p);
@@ -625,6 +967,12 @@ namespace BoWeather.Particles
 
         private void DrawPuffySnowCap(Graphics g, float left, float top, float width, float[] heights, bool isWindow)
         {
+            DrawPuffySnowCap(g, left, top, width, heights, isWindow, 1.0f);
+        }
+
+        private void DrawPuffySnowCap(Graphics g, float left, float top, float width, float[] heights, bool isWindow, float alpha)
+        {
+            if (alpha <= 0.01f) return;
             if (heights == null || heights.Length < 2 || width <= 16f) return;
 
             int n = heights.Length;
@@ -682,37 +1030,33 @@ namespace BoWeather.Particles
             {
                 path.AddCurve(topPts.ToArray(), 0.32f);
 
-                if (isWindow)
-                {
-                    // Perfectly straight flat bottom resting flush against window top ledge
-                    path.AddLine(snowLeft + snowWidth, top, snowLeft, top);
-                }
-                else
-                {
-                    // Floor snow extends down to screen edge
-                    path.AddLine(snowLeft + snowWidth, top, snowLeft + snowWidth, top + 35f);
-                    path.AddLine(snowLeft + snowWidth, top + 35f, snowLeft, top + 35f);
-                    path.AddLine(snowLeft, top + 35f, snowLeft, top);
-                }
+                // Perfectly straight flat bottom resting flush against window or taskbar top ledge
+                path.AddLine(snowLeft + snowWidth, top, snowLeft, top);
                 path.CloseFigure();
 
                 float capTop = top - Math.Max(12.0f, maxH);
-                float capBottom = top + (isWindow ? 2.0f : 25.0f);
+                float capBottom = top + 2.0f;
+
+                int a255 = Math.Max(0, Math.Min(255, (int)(255 * alpha)));
+                int a222 = Math.Max(0, Math.Min(255, (int)(222 * alpha)));
+                int a248 = Math.Max(0, Math.Min(255, (int)(248 * alpha)));
+                int a50 = Math.Max(0, Math.Min(255, (int)(50 * alpha)));
+                int a235 = Math.Max(0, Math.Min(255, (int)(235 * alpha)));
 
                 if (capBottom > capTop)
                 {
                     using (LinearGradientBrush snowGrad = new LinearGradientBrush(
                         new PointF(0, capTop),
                         new PointF(0, capBottom),
-                        Color.FromArgb(255, 255, 255, 255),
-                        Color.FromArgb(255, 222, 235, 248)))
+                        Color.FromArgb(a255, 255, 255, 255),
+                        Color.FromArgb(a255, a222, a235, a248)))
                     {
                         g.FillPath(snowGrad, path);
                     }
                 }
                 else
                 {
-                    using (SolidBrush solid = new SolidBrush(Color.White))
+                    using (SolidBrush solid = new SolidBrush(Color.FromArgb(a255, 255, 255, 255)))
                     {
                         g.FillPath(solid, path);
                     }
@@ -722,14 +1066,14 @@ namespace BoWeather.Particles
                 if (isWindow)
                 {
                     // Soft subtle bottom baseline along the ledge
-                    using (Pen shadowPen = new Pen(Color.FromArgb(50, 135, 165, 195), 1.0f))
+                    using (Pen shadowPen = new Pen(Color.FromArgb(a50, 135, 165, 195), 1.0f))
                     {
                         g.DrawLine(shadowPen, snowLeft + 4f, top + 0.5f, snowLeft + snowWidth - 4f, top + 0.5f);
                     }
                 }
 
                 // Crystalline crest highlight along top ridge
-                using (Pen crestPen = new Pen(Color.FromArgb(235, 255, 255, 255), 1.0f))
+                using (Pen crestPen = new Pen(Color.FromArgb(a235, 255, 255, 255), 1.0f))
                 {
                     g.DrawCurve(crestPen, topPts.ToArray(), 0.32f);
                 }

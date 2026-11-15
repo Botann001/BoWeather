@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -95,6 +96,19 @@ namespace BoWeather
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);
         private const int VK_LBUTTON = 0x01;
+
+        [DllImport("user32.dll")]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+        [DllImport("user32.dll")]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+        private const int WM_HOTKEY = 0x0312;
+        private const int HOTKEY_ID = 9001;
+        private const uint MOD_CONTROL = 0x0002;
+        private const uint MOD_SHIFT = 0x0004;
+
+        public TrayIconManager TrayManager { get; set; }
 
         private const int SM_XVIRTUALSCREEN = 76;
         private const int SM_YVIRTUALSCREEN = 77;
@@ -226,12 +240,31 @@ namespace BoWeather
             }
             catch {}
 
+            try
+            {
+                RegisterHotKey(this.Handle, HOTKEY_ID, MOD_CONTROL | MOD_SHIFT, (uint)Keys.W);
+            }
+            catch {}
+
             InitBuffers(vw, vh);
 
             _renderTimer = new Timer();
             _renderTimer.Interval = 16;
             _renderTimer.Tick += OnRenderTick;
             _renderTimer.Start();
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_HOTKEY && m.WParam.ToInt32() == HOTKEY_ID)
+            {
+                if (TrayManager != null)
+                {
+                    TrayManager.ToggleControlCenter();
+                }
+                return;
+            }
+            base.WndProc(ref m);
         }
 
         private void InitBuffers(int width, int height)
@@ -272,10 +305,12 @@ namespace BoWeather
             if (root == IntPtr.Zero) root = fgWnd;
             if (root == this.Handle) return false;
 
-            // Ignore desktop background and taskbar
+            // Ignore desktop background, taskbar, and shell flyouts
             GetClassName(root, _fgClassBuffer, _fgClassBuffer.Capacity);
             string cls = _fgClassBuffer.ToString();
-            if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd")
+            if (cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd" ||
+                cls.Contains("ControlCenter") || cls.Contains("Flyout") || cls.Contains("Island") ||
+                cls == "Windows.UI.Core.CoreWindow")
             {
                 return false;
             }
@@ -305,41 +340,54 @@ namespace BoWeather
 
         private void OnRenderTick(object sender, EventArgs e)
         {
-            if (_isPaused) return;
-
-            // Auto-pause when a fullscreen game is active
-            if (_autoPauseOnFullscreenGame && CheckIfFullscreenGameActive())
+            try
             {
-                if (!_wasAutoPaused)
+                if (_isPaused) return;
+
+                // Auto-pause when a fullscreen game is active
+                if (_autoPauseOnFullscreenGame && CheckIfFullscreenGameActive())
                 {
-                    _wasAutoPaused = true;
-                    _bufferGraphics.Clear(Color.FromArgb(0, 0, 0, 0));
-                    RenderLayeredWindow();
+                    if (!_wasAutoPaused)
+                    {
+                        _wasAutoPaused = true;
+                        _bufferGraphics.Clear(Color.FromArgb(0, 0, 0, 0));
+                        RenderLayeredWindow();
+                        if (TrayManager != null) TrayManager.OnFullscreenStateChanged(true);
+                    }
+                    return; // 0% CPU, 0% GPU while playing games!
                 }
-                return; // 0% CPU, 0% GPU while playing games!
+
+                if (_wasAutoPaused)
+                {
+                    _wasAutoPaused = false;
+                    if (TrayManager != null) TrayManager.OnFullscreenStateChanged(false);
+                }
+                else
+                {
+                    _wasAutoPaused = false;
+                }
+
+                SetWindowPos(this.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+                _taskbarTop = GetTaskbarTop();
+                _particleSystem.TaskbarTop = _taskbarTop;
+
+                _windowManager.RefreshWindows(false);
+
+                Point cursor = Cursor.Position;
+                int mouseX = cursor.X - Bounds.Left;
+                int mouseY = cursor.Y - Bounds.Top;
+                bool isMouseDown = (_mouseHook == IntPtr.Zero) && ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0);
+
+                _particleSystem.Update(_windowManager, mouseX, mouseY, isMouseDown);
+
+                _bufferGraphics.Clear(Color.FromArgb(0, 0, 0, 0));
+
+                _particleSystem.Draw(_bufferGraphics, _windowManager);
+
+                RenderLayeredWindow();
             }
-
-            _wasAutoPaused = false;
-
-            SetWindowPos(this.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-
-            _taskbarTop = GetTaskbarTop();
-            _particleSystem.TaskbarTop = _taskbarTop;
-
-            _windowManager.RefreshWindows(false);
-
-            Point cursor = Cursor.Position;
-            int mouseX = cursor.X - Bounds.Left;
-            int mouseY = cursor.Y - Bounds.Top;
-            bool isMouseDown = (_mouseHook == IntPtr.Zero) && ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0);
-
-            _particleSystem.Update(_windowManager, mouseX, mouseY, isMouseDown);
-
-            _bufferGraphics.Clear(Color.FromArgb(0, 0, 0, 0));
-
-            _particleSystem.Draw(_bufferGraphics, _windowManager);
-
-            RenderLayeredWindow();
+            catch { }
         }
 
         private static bool IsDesktopWindow(IntPtr hWnd)
@@ -349,6 +397,16 @@ namespace BoWeather
             GetClassName(hWnd, sb, 64);
             string cls = sb.ToString();
             return (cls == "Progman" || cls == "WorkerW" || cls == "SHELLDLL_DefView" || cls == "SysListView32");
+        }
+
+        private static bool IsDesktopOrTaskbarWindow(IntPtr hWnd)
+        {
+            if (hWnd == IntPtr.Zero) return false;
+            StringBuilder sb = new StringBuilder(64);
+            GetClassName(hWnd, sb, 64);
+            string cls = sb.ToString();
+            return (cls == "Progman" || cls == "WorkerW" || cls == "SHELLDLL_DefView" || cls == "SysListView32" ||
+                    cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd" || cls.Contains("Tray") || cls.Contains("Taskbar"));
         }
 
         private int GetTaskbarTop()
@@ -384,9 +442,9 @@ namespace BoWeather
                 for (int w = 0; w < windows.Count; w++)
                 {
                     WindowInfo win = windows[w];
-                    if (win.SnowHeights == null) continue;
+                    if (win.SnowHeights == null || !win.HasSnow()) continue;
                     Rectangle b = win.Bounds;
-                    if (x >= b.Left && x <= b.Right && y >= b.Top - 35 && y <= b.Top + 15)
+                    if (x >= b.Left && x <= b.Right && y >= b.Top - 35 && y <= b.Top + 6)
                     {
                         return true;
                     }
@@ -394,7 +452,8 @@ namespace BoWeather
 
                 if (_windowManager.FloorSnowPoints != null)
                 {
-                    if (y >= Bounds.Height - 45 && y <= Bounds.Height + 10)
+                    int floorLevel = (_taskbarTop > 100 && _taskbarTop <= Bounds.Height) ? _taskbarTop : Bounds.Height;
+                    if (y >= floorLevel - 110 && y <= Bounds.Height + 15)
                     {
                         return true;
                     }
@@ -405,90 +464,122 @@ namespace BoWeather
 
         private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
-            if (nCode >= 0 && !_isPaused && _particleSystem != null && _particleSystem.CurrentEffect == EffectType.Snow)
+            try
             {
-                int msg = wParam.ToInt32();
-                MSLLHOOKSTRUCT hook = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
-                int mouseX = hook.pt.x - Bounds.Left;
-                int mouseY = hook.pt.y - Bounds.Top;
-
-                if (msg == WM_LBUTTONDOWN)
+                if (nCode >= 0 && !_isPaused && _particleSystem != null && _particleSystem.CurrentEffect == EffectType.Snow)
                 {
-                    // 1. Did the user click an existing Snowball / Snowman?
-                    Snowball hit = _particleSystem.Snowballs.HitTest(mouseX, mouseY);
-                    if (hit != null)
-                    {
-                        _isHookInteracting = true;
-                        _particleSystem.Snowballs.StartDrag(hit, mouseX, mouseY);
-                        return (IntPtr)1; // Consume event! No Desktop Selection Box!
-                    }
+                    int msg = wParam.ToInt32();
+                    MSLLHOOKSTRUCT hook = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
+                    int mouseX = hook.pt.x - Bounds.Left;
+                    int mouseY = hook.pt.y - Bounds.Top;
 
-                    // 2. Did the user click on a snow surface?
-                    if (IsPointOnSnowSurface(mouseX, mouseY))
+                    if (msg == WM_LBUTTONDOWN)
                     {
-                        _isHookInteracting = true;
-                        _particleSystem.Snowballs.StartCandidateRoll(mouseX, mouseY);
-
-                        // If the click lands on the Desktop Wallpaper, consume it so Windows doesn't create a selection box!
-                        IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
-                        if (IsDesktopWindow(wndUnderCursor))
+                        // 1. Did the user click an existing Snowball / Snowman?
+                        Snowball hit = _particleSystem.Snowballs.HitTest(mouseX, mouseY);
+                        if (hit != null)
                         {
+                            _isHookInteracting = true;
+                            _particleSystem.Snowballs.StartDrag(hit, mouseX, mouseY);
+                            return (IntPtr)1; // Consume event! No Desktop Selection Box!
+                        }
+
+                        // 2. Did the user click on a snow surface?
+                        if (IsPointOnSnowSurface(mouseX, mouseY))
+                        {
+                            IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
+
+                            // Allow rolling on desktop or taskbar, or on active floating window snow ledge
+                            bool canRoll = false;
+                            if (IsDesktopOrTaskbarWindow(wndUnderCursor) || (hook.pt.y >= _taskbarTop - 45 && hook.pt.y <= _taskbarTop + 25))
+                            {
+                                canRoll = true;
+                            }
+                            else
+                            {
+                                // Check if clicking the top snow ledge of an active floating window
+                                List<WindowInfo> windows = _windowManager.ActiveWindows;
+                                for (int w = 0; w < windows.Count; w++)
+                                {
+                                    WindowInfo win = windows[w];
+                                    Rectangle b = win.Bounds;
+                                    if (mouseX >= b.Left && mouseX <= b.Right && mouseY >= b.Top - 35 && mouseY <= b.Top + 6)
+                                    {
+                                        canRoll = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (canRoll)
+                            {
+                                _isHookInteracting = true;
+                                _particleSystem.Snowballs.StartCandidateRoll(mouseX, mouseY);
+
+                                // Consume event on desktop so Windows doesn't create desktop selection rectangle
+                                if (IsDesktopWindow(wndUnderCursor))
+                                {
+                                    return (IntPtr)1;
+                                }
+                            }
+                        }
+                    }
+                    else if (msg == WM_MOUSEMOVE)
+                    {
+                        if (_isHookInteracting)
+                        {
+                            int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
+                            _particleSystem.Snowballs.OnMouseMove(mouseX, mouseY, _windowManager, Bounds.Width, floorY, _particleSystem.SpawnSnowPuff);
+                        }
+                        // NEVER return (IntPtr)1 for WM_MOUSEMOVE! In WH_MOUSE_LL, returning non-zero freezes the Windows cursor!
+                    }
+                    else if (msg == WM_LBUTTONUP)
+                    {
+                        if (_isHookInteracting)
+                        {
+                            _isHookInteracting = false;
+                            int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
+                            _particleSystem.Snowballs.OnMouseUp(mouseX, mouseY, _windowManager, floorY, _particleSystem.SpawnSnowPuff);
+                            IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
+                            if (IsDesktopWindow(wndUnderCursor))
+                            {
+                                return (IntPtr)1; // Consume event so desktop doesn't receive mouse-up
+                            }
+                        }
+                    }
+                    else if (msg == WM_RBUTTONDOWN)
+                    {
+                        Snowball hit = _particleSystem.Snowballs.HitTest(mouseX, mouseY);
+                        if (hit != null)
+                        {
+                            _isRightClickInteracting = true;
+                            _particleSystem.Snowballs.ShatterBall(hit, _particleSystem.SpawnSnowPuff);
+                            return (IntPtr)1; // Consume event! Shatter into flurry, no desktop context menu!
+                        }
+
+                        // Right-click on snow surface
+                        if (IsPointOnSnowSurface(mouseX, mouseY))
+                        {
+                            IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
+                            if (IsDesktopWindow(wndUnderCursor))
+                            {
+                                _isRightClickInteracting = true;
+                                _particleSystem.SpawnSnowPuff(mouseX, mouseY, 16);
+                                return (IntPtr)1; // Consume event so no desktop context menu!
+                            }
+                        }
+                    }
+                    else if (msg == WM_RBUTTONUP)
+                    {
+                        if (_isRightClickInteracting)
+                        {
+                            _isRightClickInteracting = false;
                             return (IntPtr)1;
                         }
                     }
                 }
-                else if (msg == WM_MOUSEMOVE)
-                {
-                    if (_isHookInteracting)
-                    {
-                        _particleSystem.Snowballs.OnMouseMove(mouseX, mouseY, _windowManager, Bounds.Width, Bounds.Height, _particleSystem.SpawnSnowPuff);
-                    }
-                    // NEVER return (IntPtr)1 for WM_MOUSEMOVE! In WH_MOUSE_LL, returning non-zero freezes the Windows cursor!
-                }
-                else if (msg == WM_LBUTTONUP)
-                {
-                    if (_isHookInteracting)
-                    {
-                        _isHookInteracting = false;
-                        _particleSystem.Snowballs.OnMouseUp(mouseX, mouseY, _windowManager, Bounds.Height, _particleSystem.SpawnSnowPuff);
-                        IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
-                        if (IsDesktopWindow(wndUnderCursor))
-                        {
-                            return (IntPtr)1; // Consume event so desktop doesn't receive mouse-up
-                        }
-                    }
-                }
-                else if (msg == WM_RBUTTONDOWN)
-                {
-                    Snowball hit = _particleSystem.Snowballs.HitTest(mouseX, mouseY);
-                    if (hit != null)
-                    {
-                        _isRightClickInteracting = true;
-                        _particleSystem.Snowballs.ShatterBall(hit, _particleSystem.SpawnSnowPuff);
-                        return (IntPtr)1; // Consume event! Shatter into flurry, no desktop context menu!
-                    }
-
-                    // Right-click on snow surface
-                    if (IsPointOnSnowSurface(mouseX, mouseY))
-                    {
-                        IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
-                        if (IsDesktopWindow(wndUnderCursor))
-                        {
-                            _isRightClickInteracting = true;
-                            _particleSystem.SpawnSnowPuff(mouseX, mouseY, 16);
-                            return (IntPtr)1; // Consume event so no desktop context menu!
-                        }
-                    }
-                }
-                else if (msg == WM_RBUTTONUP)
-                {
-                    if (_isRightClickInteracting)
-                    {
-                        _isRightClickInteracting = false;
-                        return (IntPtr)1;
-                    }
-                }
             }
+            catch { }
 
             return CallNextHookEx(_mouseHook, nCode, wParam, lParam);
         }
@@ -535,6 +626,11 @@ namespace BoWeather
                     UnhookWindowsHookEx(_mouseHook);
                     _mouseHook = IntPtr.Zero;
                 }
+                try
+                {
+                    UnregisterHotKey(this.Handle, HOTKEY_ID);
+                }
+                catch {}
                 if (_renderTimer != null)
                 {
                     _renderTimer.Stop();

@@ -32,11 +32,16 @@ namespace BoWeather.Particles
         public int SplashFrame;
         public int Variant;
         public float Alpha;
+        public EffectType Effect;
+        public bool IsFadingOut;
+        public float TargetAlpha;
 
         public Particle()
         {
             State = ParticleState.Falling;
             Alpha = 1.0f;
+            TargetAlpha = 1.0f;
+            IsFadingOut = false;
         }
     }
 }

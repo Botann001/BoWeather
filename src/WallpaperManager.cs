@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -8,6 +9,17 @@ using BoWeather.Particles;
 
 namespace BoWeather
 {
+    [ComImport, Guid("C2CF3110-460E-4fc1-B9D0-8A1C0C9CC4BD")]
+    public class DesktopWallpaperCoClass {}
+
+    [ComImport, Guid("B92B56A9-8B55-4E14-9A89-0199BBB6F93B"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IDesktopWallpaper
+    {
+        void SetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID, [MarshalAs(UnmanagedType.LPWStr)] string wallpaper);
+        [return: MarshalAs(UnmanagedType.LPWStr)]
+        string GetWallpaper([MarshalAs(UnmanagedType.LPWStr)] string monitorID);
+    }
+
     public class WallpaperManager
     {
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
@@ -28,24 +40,92 @@ namespace BoWeather
             }
         }
 
+        // 8 time-of-day slots, following the KoiArt layout (see WALLPAPER_PROMPTS.md).
+        // Dawn 04-06, Sunrise 06-08, Morning 08-11, Midday 11-15,
+        // Golden hour 15-17, Sunset 17-19, Dusk 19-21, Night 21-04.
+        public string GetCurrentTimeSlot()
+        {
+            int hour = DateTime.Now.Hour;
+            if (hour >= 4 && hour < 6) return "dawn";
+            if (hour >= 6 && hour < 8) return "sunrise";
+            if (hour >= 8 && hour < 11) return "morning";
+            if (hour >= 11 && hour < 15) return "midday";
+            if (hour >= 15 && hour < 17) return "golden_hour";
+            if (hour >= 17 && hour < 19) return "sunset";
+            if (hour >= 19 && hour < 21) return "dusk";
+            return "night";
+        }
+
         public void ApplyThemeWallpaper(EffectType effect)
         {
-            string fileName = string.Format("theme_{0}.png", effect.ToString().ToLower());
-            string fullPath = Path.Combine(_wallpaperFolder, fileName);
-
-            // Generate aesthetic wallpaper if it does not already exist
-            if (!File.Exists(fullPath))
+            List<string> effectNames = new List<string>();
+            string primary = effect.ToString().ToLower();
+            effectNames.Add(primary);
+            if (effect == EffectType.AutumnLeaves)
             {
-                GenerateAestheticWallpaper(effect, fullPath);
+                effectNames.Add("autumn");
+                effectNames.Add("autumn_leaves");
+                effectNames.Add("autumnleaves");
             }
 
-            SetWallpaper(fullPath);
+            string slot = GetCurrentTimeSlot();
+
+            // Prefer high-quality PNG first, then JPG, JPEG, BMP
+            string[] extensions = new string[] { ".png", ".jpg", ".jpeg", ".bmp" };
+
+            // 1. Prefer time-of-day variant, e.g. theme_snow_midday.png or .jpg
+            foreach (string name in effectNames)
+            {
+                foreach (string ext in extensions)
+                {
+                    string timedFileName = string.Format("theme_{0}_{1}{2}", name, slot, ext);
+                    string timedPath = Path.Combine(_wallpaperFolder, timedFileName);
+                    if (File.Exists(timedPath))
+                    {
+                        SetWallpaper(timedPath);
+                        return;
+                    }
+                }
+            }
+
+            // 2. Fallback to base theme wallpaper, e.g. theme_snow.png or .jpg
+            foreach (string name in effectNames)
+            {
+                foreach (string ext in extensions)
+                {
+                    string fileName = string.Format("theme_{0}{1}", name, ext);
+                    string fullPath = Path.Combine(_wallpaperFolder, fileName);
+                    if (File.Exists(fullPath))
+                    {
+                        SetWallpaper(fullPath);
+                        return;
+                    }
+                }
+            }
+
+            // 3. Fallback to generating default procedural wallpaper if missing
+            string defaultPath = Path.Combine(_wallpaperFolder, string.Format("theme_{0}.png", primary));
+            if (!File.Exists(defaultPath))
+            {
+                GenerateAestheticWallpaper(effect, defaultPath);
+            }
+
+            SetWallpaper(defaultPath);
         }
 
         public void SetWallpaper(string imagePath)
         {
-            if (File.Exists(imagePath))
+            if (string.IsNullOrEmpty(imagePath) || !File.Exists(imagePath)) return;
+
+            try
             {
+                IDesktopWallpaper dw = (IDesktopWallpaper)new DesktopWallpaperCoClass();
+                dw.SetWallpaper(null, imagePath);
+                return;
+            }
+            catch
+            {
+                // Fallback to legacy API if COM fails
                 SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, imagePath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             }
         }

@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BoWeather Control Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============ DESIGN TOKENS ============ */
+:root {
+  --accent: #0a6fd6;          /* aksen: tile terpilih, switch aktif, tombol utama */
+  --on-accent: #ffffff;
+  --radius-panel: 22px;
+  --radius-tile: 16px;
+  --radius-card: 18px;
+  --radius-btn: 14px;
+}
+[data-mode="dark"] {
+  --bg: linear-gradient(180deg,#0b1a2e 0%,#14304a 30%,#24445a 55%,#2f4f5e 75%,#3a5868 100%);
+  --m1:#1c3550; --m2:#4b6577;
+  --panel: rgba(28,29,32,.94); --border: rgba(255,255,255,.10); --shadow: 0 24px 60px rgba(0,0,0,.5);
+  --text:#ffffff; --sub: rgba(255,255,255,.70); --value:#8cc2ff;
+  --tile: rgba(255,255,255,.08); --card: rgba(255,255,255,.06); --iconbox: rgba(255,255,255,.10);
+  --divider: rgba(255,255,255,.08); --track: rgba(255,255,255,.16); --close: rgba(255,255,255,.08);
+  --ghost: rgba(255,255,255,.10); --chip: rgba(28,29,32,.92); --chipfg:#ffffff; --swoff: rgba(255,255,255,.22);
+  --quitbg: rgba(255,99,88,.20); --quitfg:#ffb9b2; --focus:#ffffff;
+}
+[data-mode="light"] {
+  --bg: linear-gradient(180deg,#f0b985 0%,#e9b08a 22%,#d9c3c6 42%,#e3e9f3 60%,#f6f8fc 100%);
+  --m1:#c4d0e4; --m2:#ffffff;
+  --panel: rgba(255,255,255,.88); --border: rgba(0,0,0,.08); --shadow: 0 24px 60px rgba(60,40,20,.22);
+  --text:#16181d; --sub: rgba(22,24,29,.68); --value:#0a5bb8;
+  --tile: rgba(0,0,0,.05); --card: rgba(0,0,0,.04); --iconbox: rgba(0,0,0,.06);
+  --divider: rgba(0,0,0,.08); --track: rgba(0,0,0,.13); --close: rgba(0,0,0,.06);
+  --ghost: rgba(0,0,0,.06); --chip: rgba(255,255,255,.92); --chipfg:#16181d; --swoff: rgba(0,0,0,.22);
+  --quitbg: rgba(220,53,40,.12); --quitfg:#b3261e; --focus:#0a6fd6;
+}
+
+/* ============ BASE ============ */
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; display: flex; justify-content: center; font-family: 'Inter', system-ui, sans-serif; color: var(--text); background: var(--bg); position: relative; overflow-x: hidden; }
+button { font-family: inherit; color: inherit; border: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.mountains { position: fixed; left: 0; bottom: 0; width: 100%; height: 330px; pointer-events: none; }
+.mountains .m1 { fill: var(--m1); }
+.mountains .m2 { fill: var(--m2); }
+.stage { position: relative; width: 392px; max-width: 100%; padding: 24px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+
+/* ============ CHIP TEMA AKTIF ============ */
+.chip { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 14px; background: var(--chip); color: var(--chipfg); font-size: 14px; font-weight: 600; box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.chip .chev { opacity: .7; }
+
+/* ============ PANEL ============ */
+.panel { width: 100%; padding: 18px; display: flex; flex-direction: column; gap: 16px; background: var(--panel); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--border); border-radius: var(--radius-panel); box-shadow: var(--shadow); }
+.head { display: flex; align-items: center; justify-content: space-between; height: 32px; }
+.head h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+.head .btns { display: flex; gap: 6px; }
+.icon-btn { width: 32px; height: 32px; border-radius: 10px; background: var(--close); display: flex; align-items: center; justify-content: center; }
+
+/* grid tema + jeda: 3 kolom x 2 baris */
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.tile { height: 68px; border-radius: var(--radius-tile); background: var(--tile); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.tile[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+
+/* slider */
+.sliders { display: flex; flex-direction: column; gap: 14px; padding: 0 2px; }
+.srow .top { display: flex; align-items: center; justify-content: space-between; height: 24px; margin-bottom: 6px; }
+.srow .name { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+.srow .val { font-size: 13px; font-weight: 600; color: var(--value); }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 26px; margin: 0; background: transparent; cursor: pointer; }
+input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--accent) var(--p), var(--track) var(--p)); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -7px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.45); border: 0; }
+input[type=range]::-moz-range-track { height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--accent) var(--p), var(--track) var(--p)); }
+input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.45); border: 0; }
+
+/* kartu toggle */
+.card { background: var(--card); border-radius: var(--radius-card); padding: 4px; display: flex; flex-direction: column; }
+.row { display: flex; align-items: center; gap: 12px; padding: 0 12px; height: 58px; border-radius: var(--radius-btn); background: transparent; text-align: left; }
+.row + .row { position: relative; }
+.divider { height: 1px; background: var(--divider); margin: 0 12px; }
+.row .ibox { width: 36px; height: 36px; border-radius: 11px; background: var(--iconbox); display: flex; align-items: center; justify-content: center; flex: none; }
+.row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.row .t1 { font-size: 14px; font-weight: 600; }
+.row .t2 { font-size: 12px; color: var(--sub); }
+.switch { width: 44px; height: 26px; border-radius: 13px; position: relative; flex: none; background: var(--swoff); transition: background .15s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); transition: left .15s; }
+.row[aria-pressed="true"] .switch { background: var(--accent); }
+.row[aria-pressed="true"] .switch::after { left: 21px; }
+
+/* tombol aksi 2x2 */
+.actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.btn { height: 44px; border-radius: var(--radius-btn); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 600; white-space: nowrap; background: var(--ghost); }
+.btn.primary { background: var(--accent); color: var(--on-accent); }
+.btn.quit { background: var(--quitbg); color: var(--quitfg); }
+</style>
+</head>
+<body data-mode="dark">
+
+<svg class="mountains" viewBox="0 0 440 330" preserveAspectRatio="none" aria-hidden="true">
+  <path class="m1" opacity=".7" d="M0 120 L70 40 L130 100 L190 20 L270 110 L340 50 L440 130 L440 330 L0 330Z"/>
+  <path class="m2" opacity=".85" d="M0 200 L90 130 L160 190 L250 120 L340 195 L440 150 L440 330 L0 330Z"/>
+</svg>
+
+<div class="stage">
+  <div class="chip" id="chip"></div>
+
+  <div class="panel">
+    <div class="head">
+      <h1>BoWeather Control Center</h1>
+      <div class="btns">
+        <button class="icon-btn" id="modeBtn" data-action="mode"></button>
+        <button class="icon-btn" data-action="close" aria-label="Tutup panel"></button>
+      </div>
+    </div>
+
+    <div class="tiles" id="tiles"></div>
+
+    <div class="sliders">
+      <div class="srow">
+        <div class="top"><div class="name" id="windName"></div><div class="val" id="windVal"></div></div>
+        <input type="range" id="wind" min="0" max="100" value="50" aria-label="Kekuatan Angin">
+      </div>
+      <div class="srow">
+        <div class="top"><div class="name" id="densName"></div><div class="val" id="densVal"></div></div>
+        <input type="range" id="density" min="0" max="100" value="50" aria-label="Kepadatan Partikel">
+      </div>
+    </div>
+
+    <div class="card" id="toggles"></div>
+
+    <div class="actions" id="actions"></div>
+  </div>
+</div>
+
+<script>
+/* ============ IKON (viewBox 24, stroke) ============ */
+const petals = [0,72,144,216,288].map(r => `<ellipse cx="0" cy="-5" rx="3" ry="4.2" transform="rotate(${r})"/>`).join('');
+const ICON = {
+  sakura:  `<g transform="translate(12 12)">${petals}</g><circle cx="12" cy="12" r="1.2" fill="currentColor"/>`,
+  snow:    `<path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7M9.5 3.8L12 6l2.5-2.2M9.5 20.2L12 18l2.5 2.2"/>`,
+  autumn:  `<path d="M5 19c0-8 5-14 15-14 0 9-5 15-12 15-1.2 0-2-.4-3-1z"/><path d="M5 19c3-4 6-7 10-9"/>`,
+  rain:    `<path d="M7 14a4.5 4.5 0 0 1-.6-8.9A6 6 0 0 1 18 7a3.8 3.8 0 0 1 0 7"/><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3"/>`,
+  fly:     `<path d="M10 4l1.6 4.4L16 10l-4.4 1.6L10 16l-1.6-4.4L4 10l4.4-1.6z"/><path d="M18 14l.8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8z"/>`,
+  pause:   `<rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/>`,
+  play:    `<path d="M8 5l11 7-11 7z"/>`,
+  wind:    `<path d="M3 9h11a3 3 0 1 0-3-3"/><path d="M3 14h15a3 3 0 1 1-3 3"/><path d="M3 19h6"/>`,
+  density: `<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><circle cx="17.5" cy="17.5" r="3.5"/>`,
+  physics: `<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M3 11h18"/><circle cx="8" cy="3.5" r="1"/><circle cx="13" cy="4.5" r="1"/>`,
+  gamepad: `<rect x="2.5" y="7" width="19" height="11" rx="5.5"/><path d="M8 10.5v4M6 12.5h4"/><circle cx="16" cy="11.5" r=".8" fill="currentColor"/><circle cx="18" cy="13.5" r=".8" fill="currentColor"/>`,
+  clock:   `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>`,
+  image:   `<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 9"/>`,
+  folder:  `<path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>`,
+  globe:   `<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>`,
+  close:   `<path d="M6 6l12 12M18 6L6 18"/>`,
+  moon:    `<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/>`,
+  sun:     `<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>`,
+  chev:    `<path d="M6 9l6 6 6-6"/>`
+};
+const svg = (n, s = 24) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[n]}</svg>`;
+
+/* ============ STATE ============ */
+const THEMES = [
+  { id: 'sakura', label: 'Sakura' },
+  { id: 'snow',   label: 'Salju' },
+  { id: 'autumn', label: 'Daun Gugur' },
+  { id: 'rain',   label: 'Hujan' },
+  { id: 'fly',    label: 'Kunang-kunang' }
+];
+const state = { mode: 'dark', theme: 'snow', paused: false, physics: true, autoPause: true, autoTime: true, lang: 'ID', wind: 50, density: 50, applied: false };
+
+const level = (v, a, b, c) => v < 34 ? a : v < 67 ? b : c;
+
+/* ============ HOOK KE APLIKASI ============
+   Ganti isi fungsi ini dengan pemanggilan ke logika aplikasi sungguhan. */
+const app = {
+  setTheme(id)        { /* mis. engine.setParticleTheme(id) */ },
+  setPaused(v)        { /* engine.setPaused(v) */ },
+  setPhysics(v)       { /* engine.setWindowPhysics(v) */ },
+  setAutoPause(v)     { /* settings.autoPauseFullscreen = v */ },
+  setAutoTime(v)      { /* wallpaper.autoByTime = v */ },
+  setWind(v)          { /* engine.setWind(v / 100) */ },
+  setDensity(v)       { /* engine.setDensity(v / 100) */ },
+  applyWallpaper(id)  { /* wallpaper.applyForTheme(id) */ },
+  pickImage()         { /* buka file dialog */ },
+  setLanguage(code)   { /* i18n.set(code) */ },
+  quit()              { /* app.exit() */ },
+  closePanel()        { /* panel.hide() */ }
+};
+
+/* ============ RENDER ============ */
+function render() {
+  document.body.dataset.mode = state.mode;
+  const cur = THEMES.find(t => t.id === state.theme);
+
+  document.getElementById('chip').innerHTML = `${svg(state.theme, 18)}<span>${cur.label}</span><span class="chev">${svg('chev', 14)}</span>`;
+
+  const modeBtn = document.getElementById('modeBtn');
+  modeBtn.innerHTML = svg(state.mode === 'dark' ? 'moon' : 'sun', 17);
+  modeBtn.setAttribute('aria-label', state.mode === 'dark' ? 'Ganti ke mode terang' : 'Ganti ke mode gelap');
+  document.querySelector('[data-action="close"]').innerHTML = svg('close', 16);
+
+  const tiles = THEMES.map(t => `<button class="tile" data-action="theme" data-id="${t.id}" aria-pressed="${t.id === state.theme}">${svg(t.id, 26)}<span>${t.label}</span></button>`);
+  tiles.push(`<button class="tile" data-action="pause" aria-pressed="${state.paused}">${svg(state.paused ? 'play' : 'pause', 26)}<span>${state.paused ? 'Lanjut' : 'Jeda'}</span></button>`);
+  document.getElementById('tiles').innerHTML = tiles.join('');
+
+  document.getElementById('windName').innerHTML = `${svg('wind', 20)}<span>Kekuatan Angin</span>`;
+  document.getElementById('densName').innerHTML = `${svg('density', 20)}<span>Kepadatan Partikel</span>`;
+  renderSliders();
+
+  const row = (action, icon, t1, t2, on) => `<button class="row" data-action="${action}" aria-pressed="${on}"><span class="ibox">${svg(icon, 20)}</span><span class="txt"><span class="t1">${t1}</span><span class="t2">${t2}</span></span><span class="switch"></span></button>`;
+  document.getElementById('toggles').innerHTML =
+    row('physics', 'physics', 'Window Physics', 'Partikel bertengger di window', state.physics) + '<div class="divider"></div>' +
+    row('autopause', 'gamepad', 'Auto-Pause Game', 'Hemat daya saat fullscreen / main game', state.autoPause) + '<div class="divider"></div>' +
+    row('autotime', 'clock', 'Wallpaper 8 Waktu', 'Ganti otomatis ikut tema &amp; waktu', state.autoTime);
+
+  document.getElementById('actions').innerHTML =
+    `<button class="btn primary" data-action="apply">${svg('image', 18)}<span>${state.applied ? 'Diterapkan' : 'Terapkan Wallpaper'}</span></button>` +
+    `<button class="btn" data-action="pick">${svg('folder', 18)}<span>Pilih Gambar…</span></button>` +
+    `<button class="btn" data-action="lang">${svg('globe', 18)}<span>Bahasa: ${state.lang}</span></button>` +
+    `<button class="btn quit" data-action="quit">${svg('close', 18)}<span>Keluar</span></button>`;
+}
+
+function renderSliders() {
+  const w = document.getElementById('wind'), d = document.getElementById('density');
+  w.value = state.wind; d.value = state.density;
+  w.style.setProperty('--p', state.wind + '%'); d.style.setProperty('--p', state.density + '%');
+  document.getElementById('windVal').textContent = level(state.wind, 'Tenang', 'Sepoi-sepoi', 'Kencang');
+  document.getElementById('densVal').textContent = level(state.density, 'Jarang', 'Sedang', 'Padat');
+}
+
+/* ============ EVENT ============ */
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  switch (el.dataset.action) {
+    case 'mode':      state.mode = state.mode === 'dark' ? 'light' : 'dark'; break;
+    case 'theme':     state.theme = el.dataset.id; state.applied = false; app.setTheme(state.theme); break;
+    case 'pause':     state.paused = !state.paused; app.setPaused(state.paused); break;
+    case 'physics':   state.physics = !state.physics; app.setPhysics(state.physics); break;
+    case 'autopause': state.autoPause = !state.autoPause; app.setAutoPause(state.autoPause); break;
+    case 'autotime':  state.autoTime = !state.autoTime; app.setAutoTime(state.autoTime); break;
+    case 'apply':     state.applied = true; app.applyWallpaper(state.theme); break;
+    case 'pick':      app.pickImage(); return;
+    case 'lang':      state.lang = state.lang === 'ID' ? 'EN' : 'ID'; app.setLanguage(state.lang); break;
+    case 'quit':      app.quit(); return;
+    case 'close':     app.closePanel(); return;
+  }
+  render();
+});
+document.getElementById('wind').addEventListener('input', e => { state.wind = +e.target.value; app.setWind(state.wind); renderSliders(); });
+document.getElementById('density').addEventListener('input', e => { state.density = +e.target.value; app.setDensity(state.density); renderSliders(); });
+
+render();
+</script>
+</body>
+</html>
