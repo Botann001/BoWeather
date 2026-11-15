@@ -179,64 +179,10 @@ namespace BoWeather.Particles
                 _draggedBall.Vy = mouseDy * 0.85f;
                 _draggedBall.Angle += mouseDx * 0.12f;
 
-                // When dragging a single snowball along a snow surface, allow it to continue rolling and growing!
-                if (_draggedBall.BallCount == 1)
+                // A snowball that has already been rolled keeps its fixed size when dragged or thrown!
+                if (Math.Abs(mouseDx) > 3.5f && onSnowPuff != null && _rand.Next(4) == 0)
                 {
-                    bool onSnow = false;
-                    if (winMgr != null)
-                    {
-                        List<WindowInfo> windows = winMgr.ActiveWindows;
-                        for (int w = 0; w < windows.Count; w++)
-                        {
-                            WindowInfo win = windows[w];
-                            Rectangle b = win.Bounds;
-                            if (mouseX >= b.Left && mouseX <= b.Right && mouseY >= b.Top - 45 && mouseY <= b.Top + 25 && win.HasSnow())
-                            {
-                                onSnow = true;
-                                if (win.SnowHeights != null && win.SnowHeights.Length > 1 && Math.Abs(mouseDx) > 1.5f)
-                                {
-                                    float rel = (mouseX - (b.Left + 3f)) / (b.Width - 6f);
-                                    int col = (int)(rel * (win.SnowHeights.Length - 1));
-                                    if (col >= 0 && col < win.SnowHeights.Length)
-                                    {
-                                        win.SnowHeights[col] = Math.Max(0f, win.SnowHeights[col] - 3.0f);
-                                        if (col > 0) win.SnowHeights[col - 1] = Math.Max(0f, win.SnowHeights[col - 1] - 1.5f);
-                                        if (col < win.SnowHeights.Length - 1) win.SnowHeights[col + 1] = Math.Max(0f, win.SnowHeights[col + 1] - 1.5f);
-                                    }
-                                }
-                                break;
-                            }
-                        }
-                    }
-                    if (!onSnow && mouseY >= floorY - 110)
-                    {
-                        onSnow = true;
-                        if (winMgr != null && winMgr.FloorSnowPoints != null && winMgr.FloorSnowPoints.Length > 1 && Math.Abs(mouseDx) > 1.5f)
-                        {
-                            float rel = (float)mouseX / (screenWidth - 1);
-                            int col = (int)(rel * (winMgr.FloorSnowPoints.Length - 1));
-                            if (col >= 0 && col < winMgr.FloorSnowPoints.Length)
-                            {
-                                winMgr.FloorSnowPoints[col] = Math.Max(0f, winMgr.FloorSnowPoints[col] - 3.0f);
-                                if (col > 0) winMgr.FloorSnowPoints[col - 1] = Math.Max(0f, winMgr.FloorSnowPoints[col - 1] - 1.5f);
-                                if (col < winMgr.FloorSnowPoints.Length - 1) winMgr.FloorSnowPoints[col + 1] = Math.Max(0f, winMgr.FloorSnowPoints[col + 1] - 1.5f);
-                            }
-                        }
-                    }
-
-                    if (onSnow && Math.Abs(mouseDx) > 1.0f)
-                    {
-                        if (_draggedBall.BaseRadius < MaxSnowballRadius)
-                        {
-                            float dragGrowth = Math.Abs(mouseDx) * Math.Max(0.035f, 0.16f / (1.0f + _draggedBall.BaseRadius * 0.015f));
-                            _draggedBall.BaseRadius = Math.Min(MaxSnowballRadius, _draggedBall.BaseRadius + dragGrowth);
-                            _draggedBall.Radius = _draggedBall.BaseRadius;
-                        }
-                        if (Math.Abs(mouseDx) > 3f && onSnowPuff != null && _rand.Next(3) == 0)
-                        {
-                            onSnowPuff(_draggedBall.X, _draggedBall.Y + _draggedBall.BaseRadius * 0.7f, 2);
-                        }
-                    }
+                    onSnowPuff(_draggedBall.X, _draggedBall.Y + _draggedBall.BaseRadius * 0.7f, 2);
                 }
             }
             else if (_isCandidateRolling)
