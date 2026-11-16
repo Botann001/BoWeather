@@ -1,0 +1,94 @@
+================================================================================
+  BoWeather - Interactive Desktop Weather & Physics
+  Version: 1.0.0 (Portable Edition)
+  Repository: https://github.com/Botann001/BoWeather
+================================================================================
+
+[ BAHASA INDONESIA ]
+--------------------
+CARA MENJALANKAN:
+1. Ekstrak seluruh isi file zip ini ke folder mana pun yang Anda suka.
+   (PENTING: Pastikan folder "wallpapers" tetap berada di samping BoWeather.exe).
+2. Klik ganda "BoWeather.exe" untuk langsung menjalankan aplikasi!
+   (Aplikasi ini bersifat Portable, tidak perlu instalasi apa pun).
+
+PANDUAN PENGGUNAAN:
+1. Control Center:
+   - Klik pil/tombol melayang kecil di bagian atas layar desktop Anda.
+   - Atau klik ikon BoWeather di pojok kanan bawah Taskbar (System Tray).
+   - Atau tekan tombol pintas keyboard: Ctrl + Shift + W.
+   - Di sini Anda bisa memilih 5 tema cuaca (Sakura, Salju, Daun Gugur, Hujan, Kunang-kunang),
+     mengatur kekuatan angin, kepadatan partikel, serta mode gelap/terang.
+
+2. Wallpaper 8 Waktu Otomatis:
+   - Aktifkan toggle "Wallpaper 8 Waktu" di Control Center.
+   - Wallpaper desktop Anda akan otomatis berganti sendiri secara mulus
+     mengikuti tema cuaca yang dipilih dan waktu saat ini (Fajar, Terbit, Pagi, Siang,
+     Golden Hour, Sore, Senja, Malam).
+
+3. Interaksi Fisika Salju (Snow Physics):
+   - Gulung Salju: Tahan klik kiri mouse di atas salju (pada Taskbar atau tepi jendela)
+     lalu geser mendatar untuk menggulung bola salju 3D.
+   - Pindahkan Salju: Klik dan tarik bola salju untuk memindahkannya atau melemparnya.
+     (Ukuran bola salju yang sudah digulung terkunci aman dan tidak akan membesar lagi).
+   - Buat Manusia Salju (Snowman): Letakkan bola salju di atas bola salju lainnya.
+     Tumpuk hingga 3 bola untuk menjadikannya Manusia Salju lengkap!
+   - Rontokkan Salju: Goyangkan atau geser jendela Windows dengan cepat,
+     dan salju di atas jendela akan rontok berjatuhan menimbun Taskbar!
+   - Hancurkan Salju: Klik kanan pada bola salju untuk memecahkannya.
+
+4. Auto-Pause Saat Main Game:
+   - BoWeather secara otomatis menghentikan animasi (0% CPU & GPU) saat Anda membuka game
+     atau aplikasi fullscreen, sehingga tidak akan memengaruhi performa game Anda.
+
+5. Keluar dari Aplikasi:
+   - Buka Control Center dan klik tombol merah "Keluar".
+   - Atau klik kanan ikon BoWeather di System Tray -> pilih "Keluar".
+
+================================================================================
+
+[ ENGLISH ]
+-----------
+HOW TO RUN:
+1. Extract the entire contents of this zip file to any folder you like.
+   (IMPORTANT: Ensure the "wallpapers" folder remains in the same folder as BoWeather.exe).
+2. Double-click "BoWeather.exe" to launch immediately!
+   (This is a Portable app, no installer required).
+
+HOW TO USE:
+1. Control Center:
+   - Click the small floating pill/button at the top of your desktop screen.
+   - Or click the BoWeather icon in the bottom-right System Tray (near the Windows clock).
+   - Or press the keyboard shortcut: Ctrl + Shift + W.
+   - Here you can select 5 weather themes (Sakura, Snow, Autumn Leaves, Rain, Fireflies),
+     adjust wind speed, particle density, and toggle Dark/Light mode.
+
+2. Dynamic 8-Time-of-Day Wallpapers:
+   - Turn ON the "Wallpaper 8 Waktu" toggle in the Control Center.
+   - Your desktop wallpaper will automatically and smoothly transition based on
+     the active weather theme and current time of day (Dawn, Sunrise, Morning, Midday,
+     Golden Hour, Sunset, Dusk, Night).
+
+3. Interactive Snow Physics:
+   - Roll Snowball: Left-click and drag horizontally along snow mounds (on Taskbar or window top edges)
+     to roll a 3D snowball.
+   - Move Snowball: Click and drag a snowball to reposition or throw it.
+     (Once rolled, its size is safely locked and will not unintentionally inflate).
+   - Build a Snowman: Place a snowball on top of another snowball.
+     Stack up to 3 balls to assemble a complete, charming snowman!
+   - Shake-Off Window Snow: Quickly move or shake an active window,
+     and accumulated snow will realistically slide down and pile up on your Taskbar!
+   - Shatter Snowball: Right-click on any snowball to burst it into a snow flurry.
+
+4. Auto-Pause While Gaming:
+   - BoWeather automatically pauses animation (0% CPU & GPU) whenever you launch a game
+     or full-screen application to ensure maximum frame rates.
+
+5. Exit Application:
+   - Open the Control Center and click the red "Keluar / Exit" button.
+   - Or right-click the BoWeather icon in the System Tray -> select "Keluar / Exit".
+
+================================================================================
+GitHub: https://github.com/Botann001/BoWeather
+Made with care to make your desktop alive and cozy!
+================================================================================
