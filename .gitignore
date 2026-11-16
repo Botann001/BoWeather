@@ -13,3 +13,8 @@
 # Windows
 Thumbs.db
 [Dd]esktop.ini
+
+# Builds & Releases
+dist/
+*.zip
+
