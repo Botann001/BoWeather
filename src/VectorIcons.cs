@@ -84,6 +84,24 @@ namespace BoWeather
                     case "chev":
                         DrawChev(g, pen);
                         break;
+                    case "tree":
+                        DrawTree(g, pen, fillColor);
+                        break;
+                    case "gift":
+                        DrawGift(g, pen, fillColor);
+                        break;
+                    case "lights":
+                        DrawLights(g, pen, fillColor);
+                        break;
+                    case "star":
+                        DrawStar(g, pen, fillColor);
+                        break;
+                    case "santahat":
+                        DrawSantaHat(g, pen, fillColor);
+                        break;
+                    case "refresh":
+                        DrawRefresh(g, pen);
+                        break;
                 }
             }
 
@@ -397,6 +415,98 @@ namespace BoWeather
                 new PointF(18f, 9f)
             };
             g.DrawLines(pen, pts);
+        }
+
+        private static void DrawTree(Graphics g, Pen pen, Color fillColor)
+        {
+            // Trunk
+            g.DrawLine(pen, 12f, 19f, 12f, 22f);
+
+            // Tier 3
+            PointF[] t3 = new PointF[] { new PointF(12f, 13f), new PointF(5f, 19f), new PointF(19f, 19f) };
+            g.DrawPolygon(pen, t3);
+            // Tier 2
+            PointF[] t2 = new PointF[] { new PointF(12f, 8f), new PointF(7f, 13.5f), new PointF(17f, 13.5f) };
+            g.DrawPolygon(pen, t2);
+            // Tier 1
+            PointF[] t1 = new PointF[] { new PointF(12f, 4f), new PointF(8.5f, 8.5f), new PointF(15.5f, 8.5f) };
+            g.DrawPolygon(pen, t1);
+            // Star on top
+            using (SolidBrush b = new SolidBrush(fillColor))
+            {
+                g.FillEllipse(b, 10.5f, 1.5f, 3f, 3f);
+            }
+        }
+
+        private static void DrawGift(Graphics g, Pen pen, Color fillColor)
+        {
+            // Box
+            g.DrawRectangle(pen, 6f, 10f, 12f, 11f);
+            // Lid
+            g.DrawRectangle(pen, 5f, 7f, 14f, 3.5f);
+            // Ribbon vertical
+            g.DrawLine(pen, 12f, 7f, 12f, 21f);
+            // Ribbon horizontal
+            g.DrawLine(pen, 6f, 15f, 18f, 15f);
+            // Bow loops
+            g.DrawArc(pen, 8f, 4f, 4f, 4f, 90f, 270f);
+            g.DrawArc(pen, 12f, 4f, 4f, 4f, 180f, 270f);
+        }
+
+        private static void DrawLights(Graphics g, Pen pen, Color fillColor)
+        {
+            // Wire
+            g.DrawBezier(pen, new PointF(2f, 6f), new PointF(8f, 12f), new PointF(16f, 12f), new PointF(22f, 6f));
+            // Bulbs
+            using (SolidBrush b = new SolidBrush(fillColor))
+            {
+                g.FillEllipse(b, 5.5f, 9.5f, 3.5f, 4.5f);
+                g.FillEllipse(b, 10.5f, 12f, 3.5f, 4.5f);
+                g.FillEllipse(b, 15.5f, 9.5f, 3.5f, 4.5f);
+            }
+        }
+
+        private static void DrawStar(Graphics g, Pen pen, Color fillColor)
+        {
+            PointF[] pts = new PointF[10];
+            double angleStep = Math.PI / 5.0;
+            double startAngle = -Math.PI / 2.0;
+            for (int i = 0; i < 10; i++)
+            {
+                double a = startAngle + i * angleStep;
+                float r = (i % 2 == 0) ? 9f : 4f;
+                pts[i] = new PointF(12f + (float)(Math.Cos(a) * r), 12f + (float)(Math.Sin(a) * r));
+            }
+            g.DrawPolygon(pen, pts);
+        }
+
+        private static void DrawSantaHat(Graphics g, Pen pen, Color fillColor)
+        {
+            // Brim
+            g.DrawEllipse(pen, 4f, 16f, 14f, 5f);
+            // Cap triangle curved to right
+            PointF[] cap = new PointF[]
+            {
+                new PointF(5f, 17f),
+                new PointF(12f, 6f),
+                new PointF(18f, 10f),
+                new PointF(17f, 17f)
+            };
+            g.DrawPolygon(pen, cap);
+            // Pom-pom
+            using (SolidBrush b = new SolidBrush(fillColor))
+            {
+                g.FillEllipse(b, 16.5f, 9f, 4.5f, 4.5f);
+            }
+        }
+
+        private static void DrawRefresh(Graphics g, Pen pen)
+        {
+            // Circular arrow
+            g.DrawArc(pen, 4f, 4f, 16f, 16f, 45f, 270f);
+            // Arrowhead at top
+            g.DrawLine(pen, 16f, 4f, 18.5f, 7.5f);
+            g.DrawLine(pen, 18.5f, 7.5f, 14.5f, 8.5f);
         }
 
         public static GraphicsPath CreateRoundedRect(RectangleF r, float radius)

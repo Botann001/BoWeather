@@ -90,6 +90,7 @@ namespace BoWeather.Particles
 
         public List<Snowball> Snowballs { get { return _snowballs; } }
         public int Count { get { return _snowballs.Count; } }
+        public ChristmasManager Christmas { get; set; }
 
         public void Clear()
         {
@@ -914,6 +915,54 @@ namespace BoWeather.Particles
                     new PointF(noseX + carrotL, noseY + carrotH * 0.08f)
                 };
                 g.FillPolygon(carrotBrush, nose);
+            }
+
+            // 7. Cozy Red Santa Hat (Optional Christmas Accessory)
+            if (Christmas != null && Christmas.ShowSantaHat)
+            {
+                float brimW = r3 * 1.55f;
+                float brimH = Math.Max(4.5f, r3 * 0.36f);
+                float brimY = y3 - r3 * 0.82f;
+
+                // Red velvet cap body folding over to the right
+                PointF[] hatCap = new PointF[]
+                {
+                    new PointF(s.X - brimW * 0.44f, brimY),
+                    new PointF(s.X + brimW * 0.44f, brimY),
+                    new PointF(s.X + r3 * 1.05f, brimY - r3 * 0.75f),
+                    new PointF(s.X + r3 * 1.18f, brimY - r3 * 0.40f)
+                };
+
+                using (GraphicsPath hatPath = new GraphicsPath())
+                {
+                    hatPath.AddPolygon(hatCap);
+                    using (LinearGradientBrush hatGrad = new LinearGradientBrush(
+                        new PointF(s.X - brimW * 0.5f, brimY - r3),
+                        new PointF(s.X + r3 * 1.2f, brimY),
+                        Color.FromArgb((int)(255 * alpha), 239, 68, 68),
+                        Color.FromArgb((int)(255 * alpha), 185, 28, 28)))
+                    {
+                        g.FillPath(hatGrad, hatPath);
+                    }
+                }
+
+                // White plush brim
+                using (GraphicsPath brimPath = VectorIcons.CreateRoundedRect(new RectangleF(s.X - brimW * 0.5f, brimY - brimH * 0.5f, brimW, brimH), brimH * 0.5f))
+                using (SolidBrush brimBrush = new SolidBrush(Color.FromArgb((int)(255 * alpha), 255, 255, 255)))
+                {
+                    g.FillPath(brimBrush, brimPath);
+                }
+
+                // White fluffy pom-pom at tip
+                float pomR = Math.Max(3f, r3 * 0.30f);
+                float pomX = s.X + r3 * 1.18f;
+                float pomY = brimY - r3 * 0.40f;
+                using (SolidBrush pomBrush = new SolidBrush(Color.FromArgb((int)(255 * alpha), 255, 255, 255)))
+                using (Pen pomPen = new Pen(Color.FromArgb((int)(60 * alpha), 180, 190, 200), 1f))
+                {
+                    g.FillEllipse(pomBrush, pomX - pomR, pomY - pomR, pomR * 2f, pomR * 2f);
+                    g.DrawEllipse(pomPen, pomX - pomR, pomY - pomR, pomR * 2f, pomR * 2f);
+                }
             }
         }
     }

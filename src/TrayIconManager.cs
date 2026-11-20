@@ -204,6 +204,18 @@ namespace BoWeather
             menu.MenuItems.Add(_rainItem);
             menu.MenuItems.Add(_firefliesItem);
 
+            MenuItem christmasItem = new MenuItem(isId ? "🎄 Dekorasi & Aksesoris Natal…" : "🎄 Christmas Accessories…", delegate
+            {
+                if (_overlay != null && _overlay.Christmas != null)
+                {
+                    using (ChristmasDecorForm form = new ChristmasDecorForm(_overlay.Christmas, _overlay, true))
+                    {
+                        form.ShowDialog();
+                    }
+                }
+            });
+            menu.MenuItems.Add(christmasItem);
+
             menu.MenuItems.Add("-");
 
             // Window Physics toggle

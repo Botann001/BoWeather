@@ -180,9 +180,11 @@ namespace BoWeather
         private int _taskbarTop;
         private bool _isHookInteracting = false;
         private bool _isRightClickInteracting = false;
+        private bool _isChristmasInteracting = false;
 
         public ParticleSystem Particles { get { return _particleSystem; } }
         public WindowManager WindowMgr { get { return _windowManager; } }
+        public ChristmasManager Christmas { get { return _particleSystem != null ? _particleSystem.Christmas : null; } }
         public bool IsPaused
         {
             get { return _isPaused; }
@@ -484,6 +486,18 @@ namespace BoWeather
                             return (IntPtr)1; // Consume event! No Desktop Selection Box!
                         }
 
+                        // 1.5. Did the user click on a Christmas Tree or Gift Box?
+                        if (_particleSystem.Christmas != null)
+                        {
+                            object xHit = _particleSystem.Christmas.HitTest(mouseX, mouseY);
+                            if (xHit != null)
+                            {
+                                _isChristmasInteracting = true;
+                                _particleSystem.Christmas.StartDrag(xHit, mouseX, mouseY);
+                                return (IntPtr)1; // Consume event!
+                            }
+                        }
+
                         // 2. Did the user click on a snow surface?
                         if (IsPointOnSnowSurface(mouseX, mouseY))
                         {
@@ -526,6 +540,12 @@ namespace BoWeather
                     }
                     else if (msg == WM_MOUSEMOVE)
                     {
+                        if (_isChristmasInteracting && _particleSystem.Christmas != null)
+                        {
+                            int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
+                            _particleSystem.Christmas.OnMouseMove(mouseX, mouseY, _windowManager, Bounds.Width, floorY, _particleSystem.SpawnSnowPuff);
+                        }
+
                         if (_isHookInteracting)
                         {
                             int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
@@ -535,6 +555,18 @@ namespace BoWeather
                     }
                     else if (msg == WM_LBUTTONUP)
                     {
+                        if (_isChristmasInteracting && _particleSystem.Christmas != null)
+                        {
+                            _isChristmasInteracting = false;
+                            int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
+                            _particleSystem.Christmas.OnMouseUp(mouseX, mouseY, _windowManager, floorY, _particleSystem.SpawnSnowPuff);
+                            IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
+                            if (IsDesktopWindow(wndUnderCursor))
+                            {
+                                return (IntPtr)1;
+                            }
+                        }
+
                         if (_isHookInteracting)
                         {
                             _isHookInteracting = false;
@@ -549,6 +581,25 @@ namespace BoWeather
                     }
                     else if (msg == WM_RBUTTONDOWN)
                     {
+                        // Right-click on Christmas Gift or Tree
+                        if (_particleSystem.Christmas != null)
+                        {
+                            object xHit = _particleSystem.Christmas.HitTest(mouseX, mouseY);
+                            if (xHit is ChristmasGift)
+                            {
+                                _isRightClickInteracting = true;
+                                _particleSystem.Christmas.RemoveGift((ChristmasGift)xHit);
+                                _particleSystem.SpawnSnowPuff(mouseX, mouseY, 18);
+                                return (IntPtr)1;
+                            }
+                            else if ("tree".Equals(xHit))
+                            {
+                                _isRightClickInteracting = true;
+                                _particleSystem.SpawnSnowPuff(mouseX, mouseY, 25);
+                                return (IntPtr)1;
+                            }
+                        }
+
                         Snowball hit = _particleSystem.Snowballs.HitTest(mouseX, mouseY);
                         if (hit != null)
                         {

@@ -66,11 +66,12 @@ namespace BoWeather
         private Rectangle _btnBrowseWallRect;
         private Rectangle _btnLangRect;
         private Rectangle _btnExitRect;
+        private Rectangle _btnChristmasRect;
 
         // Hover & Drag states
         private int _hoveredTile = -1;
         private int _hoveredRow = -1;    // 0=physics, 1=autopause, 2=autowall
-        private int _hoveredBtn = -1;    // 0=apply, 1=browse, 2=lang, 3=exit
+        private int _hoveredBtn = -1;    // 0=apply, 1=browse, 2=lang, 3=exit, 4=xmas
         private bool _hoverMode = false;
         private bool _hoverClose = false;
         private bool _draggingWind = false;
@@ -94,8 +95,8 @@ namespace BoWeather
             StartPosition = FormStartPosition.Manual;
             DoubleBuffered = true;
 
-            // Dimensions from DESIGN-SPEC.md: Width 392 px, Height 682 px
-            Size = new Size(392, 682);
+            // Dimensions from DESIGN-SPEC.md: Width 392 px, Height 736 px
+            Size = new Size(392, 736);
             UpdateThemeAppearance();
 
             // Fonts matching typography specification (Inter or Segoe UI fallback)
@@ -236,8 +237,12 @@ namespace BoWeather
             _autoPauseRowRect = new Rectangle(pad + cardPad, _physicsRowRect.Bottom + 1, contentW - cardPad * 2, rowH);
             _autoWallpaperRowRect = new Rectangle(pad + cardPad, _autoPauseRowRect.Bottom + 1, contentW - cardPad * 2, rowH);
 
+            // 4.5. Christmas Decor Button (Full Width, Height 44, Radius 14)
+            int xmasTop = togglesTop + containerH + gap;
+            _btnChristmasRect = new Rectangle(pad, xmasTop, contentW, 44);
+
             // 5. Action Buttons (2x2 grid, height 44, gap 8, radius 14)
-            int actionsTop = togglesTop + containerH + gap;
+            int actionsTop = _btnChristmasRect.Bottom + gap;
             int btnGap = 8;
             int btnW = (contentW - btnGap) / 2;
             int btnH = 44;
@@ -520,6 +525,13 @@ namespace BoWeather
                 isId ? "Ganti otomatis ikut tema & waktu" : "Auto-switch wallpaper by time",
                 autoWallOn, _hoveredRow == 2, iconBoxBg, swoffBg, accentColor, textMain, textSub);
 
+            // 5.5. Christmas Accessories Button
+            Color xmasBg = _isDarkMode ? Color.FromArgb(200, 20, 80, 48) : Color.FromArgb(240, 220, 248, 230);
+            Color xmasHover = _isDarkMode ? Color.FromArgb(250, 28, 105, 62) : Color.FromArgb(255, 200, 240, 215);
+            Color xmasFg = _isDarkMode ? Color.White : Color.FromArgb(255, 15, 80, 35);
+            DrawActionButton(g, _btnChristmasRect, "tree", isId ? "🎄 Dekorasi Natal…" : "🎄 Christmas Decor…",
+                xmasBg, xmasFg, _hoveredBtn == 4 ? xmasHover : xmasBg, false);
+
             // 6. Action Buttons 2x2 Grid (Radius 14)
             // Button 0: Terapkan Wallpaper (Accent Blue, turns into "Diterapkan" on click)
             string applyText = _appliedWallpaper ? (isId ? "Diterapkan" : "Applied") : (isId ? "Terapkan Wallpaper" : "Apply Wallpaper");
@@ -719,6 +731,7 @@ namespace BoWeather
             else if (_btnBrowseWallRect.Contains(pt)) newBtn = 1;
             else if (_btnLangRect.Contains(pt)) newBtn = 2;
             else if (_btnExitRect.Contains(pt)) newBtn = 3;
+            else if (_btnChristmasRect.Contains(pt)) newBtn = 4;
             if (newBtn != _hoveredBtn) { _hoveredBtn = newBtn; needRepaint = true; }
 
             // Cursor
@@ -820,6 +833,11 @@ namespace BoWeather
             }
 
             // Action Buttons
+            if (_btnChristmasRect.Contains(pt))
+            {
+                OpenChristmasDecor();
+                return;
+            }
             if (_btnApplyWallRect.Contains(pt))
             {
                 _appliedWallpaper = true;
@@ -885,6 +903,15 @@ namespace BoWeather
             if (_densityValue < 34) _trayManager.SetDensity(DensityLevel.Low);
             else if (_densityValue < 67) _trayManager.SetDensity(DensityLevel.Medium);
             else _trayManager.SetDensity(DensityLevel.High);
+        }
+
+        public void OpenChristmasDecor()
+        {
+            if (_overlay == null || _overlay.Christmas == null) return;
+            using (ChristmasDecorForm form = new ChristmasDecorForm(_overlay.Christmas, _overlay, _isDarkMode))
+            {
+                form.ShowDialog();
+            }
         }
 
         protected override void Dispose(bool disposing)

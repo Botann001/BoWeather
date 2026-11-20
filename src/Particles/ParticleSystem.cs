@@ -31,9 +31,11 @@ namespace BoWeather.Particles
         private int _prevMouseX = -1;
         private int _prevMouseY = -1;
         private readonly SnowballManager _snowballManager = new SnowballManager();
+        private readonly ChristmasManager _christmasManager = new ChristmasManager();
         private readonly List<FallingSnowShelf> _fallingSnowShelves = new List<FallingSnowShelf>();
 
         public SnowballManager Snowballs { get { return _snowballManager; } }
+        public ChristmasManager Christmas { get { return _christmasManager; } }
 
         private bool _isMeltingSnow = false;
 
@@ -128,6 +130,7 @@ namespace BoWeather.Particles
         {
             _screenWidth = screenWidth;
             _screenHeight = screenHeight;
+            _snowballManager.Christmas = _christmasManager;
             RebuildParticles();
         }
 
@@ -433,6 +436,7 @@ namespace BoWeather.Particles
             if (_currentEffect == EffectType.Snow || _isMeltingSnow || _snowballManager.Count > 0)
             {
                 _snowballManager.Update(winMgr, mouseX, mouseY, isMouseDown, _screenWidth, _screenHeight, groundY, SpawnSnowPuff);
+                _christmasManager.Update(winMgr, _screenWidth, _screenHeight, groundY, SpawnSnowPuff);
             }
 
             for (int i = _particles.Count - 1; i >= 0; i--)
@@ -931,6 +935,10 @@ namespace BoWeather.Particles
 
                 // Draw Interactive Snowballs and Snowmen!
                 _snowballManager.Draw(g);
+
+                // Draw Christmas Accessories (Tree, Gifts, String Lights, Star Lights)
+                int groundY = (_taskbarTop > 100 && _taskbarTop < _screenHeight) ? _taskbarTop : _screenHeight;
+                _christmasManager.Draw(g, winMgr, _screenWidth, _screenHeight, groundY);
             }
 
             // 2. Draw All Falling Particles across the entire screen
