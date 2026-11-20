@@ -18,3 +18,7 @@ Thumbs.db
 dist/
 *.zip
 
+# User local settings
+christmas_settings.txt
+theme_mode.txt
+language.txt
