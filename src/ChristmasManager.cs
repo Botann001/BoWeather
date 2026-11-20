@@ -34,7 +34,7 @@ namespace BoWeather
             float dx = X2 - X1;
             float dy = Y2 - Y1;
             float dist = (float)Math.Sqrt(dx * dx + dy * dy);
-            SagDepth = Math.Min(90f, Math.Max(18f, dist * 0.085f));
+            SagDepth = Math.Min(90f, Math.Max(16f, dist * 0.08f));
         }
 
         public PointF GetMidpoint()
@@ -45,7 +45,7 @@ namespace BoWeather
         public RectangleF GetDeleteButtonBounds()
         {
             PointF mid = GetMidpoint();
-            float my = mid.Y + SagDepth + 24f;
+            float my = mid.Y + SagDepth + 18f;
             return new RectangleF(mid.X - 10f, my - 10f, 20f, 20f);
         }
 
@@ -73,9 +73,9 @@ namespace BoWeather
             return new PointF(x, y);
         }
 
-        public bool IsNearWire(float px, float py, float maxDist = 18f)
+        public bool IsNearWire(float px, float py, float maxDist = 20f)
         {
-            for (int i = 1; i < 16; i++)
+            for (int i = 0; i <= 16; i++)
             {
                 float t = i / 16f;
                 PointF pt = GetBezierPoint(t);
@@ -98,7 +98,8 @@ namespace BoWeather
                 Color.FromArgb(16, 185, 129),  // Emerald Green
                 Color.FromArgb(6, 182, 212),   // Sky Cyan
                 Color.FromArgb(236, 72, 153),  // Hot Pink
-                Color.FromArgb(254, 240, 138)  // Warm White
+                Color.FromArgb(254, 240, 138), // Warm White
+                Color.FromArgb(168, 85, 247)   // Purple
             };
 
             PointF mid = GetMidpoint();
@@ -122,7 +123,7 @@ namespace BoWeather
                 }
             }
 
-            // 2. Hanging Colored Bulbs
+            // 2. Hanging Colored Bulbs along wire
             float dx = X2 - X1;
             float dy = Y2 - Y1;
             float dist = (float)Math.Sqrt(dx * dx + dy * dy);
@@ -161,31 +162,30 @@ namespace BoWeather
                 }
             }
 
-            // 3. Hanging Golden Star in the center
-            float starPulse = (float)(0.75 + 0.25 * Math.Sin(animTick * 2.6f + X1 * 0.01f));
-            float starCx = mid.X;
-            float starCy = mid.Y + SagDepth + 7f;
+            // 3. Handles & Delete Button
+            // Following reference video: When hovered or interacted, show handles and delete (X) button
+            bool showControls = IsHovered || IsGrabbedHandle1 || IsGrabbedHandle2 || IsGrabbedBody;
 
-            // Little wire connecting center to star
-            using (Pen starWirePen = new Pen(Color.FromArgb(180, 218, 165, 32), 1.2f))
+            if (showControls)
             {
-                g.DrawLine(starWirePen, starCx, starCy - 7f, starCx, starCy);
-            }
+                // Resize/Stretch Handles (Left & Right)
+                DrawHandle(g, X1, Y1, IsGrabbedHandle1, HoverPart == 2);
+                DrawHandle(g, X2, Y2, IsGrabbedHandle2, HoverPart == 3);
 
-            using (SolidBrush starGlow = new SolidBrush(Color.FromArgb((int)(60 * starPulse), 255, 215, 0)))
+                // Delete Button (X) above center
+                RectangleF delRect = GetDeleteButtonBounds();
+                bool isDelHover = (HoverPart == 1);
+                ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, isDelHover);
+            }
+            else
             {
-                g.FillEllipse(starGlow, starCx - 18f, starCy - 18f, 36f, 36f);
+                // When not hovered, draw subtle unobtrusive anchor pins so lights look clean on desktop!
+                using (SolidBrush pinBrush = new SolidBrush(Color.FromArgb(120, 255, 255, 255)))
+                {
+                    g.FillEllipse(pinBrush, X1 - 3f, Y1 - 3f, 6f, 6f);
+                    g.FillEllipse(pinBrush, X2 - 3f, Y2 - 3f, 6f, 6f);
+                }
             }
-            ChristmasManager.DrawStarPolygon(g, starCx, starCy, 9.5f, 4.2f, Color.FromArgb(255, 215, 0), Color.FromArgb(245, 158, 11));
-
-            // 4. Resize/Stretch Handles (Left & Right)
-            DrawHandle(g, X1, Y1, IsGrabbedHandle1, HoverPart == 2);
-            DrawHandle(g, X2, Y2, IsGrabbedHandle2, HoverPart == 3);
-
-            // 5. Delete Button (X)
-            RectangleF delRect = GetDeleteButtonBounds();
-            bool isDelHover = (HoverPart == 1);
-            ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, isDelHover);
         }
 
         private void DrawHandle(Graphics g, float hx, float hy, bool isGrabbed, bool isHover)
@@ -214,6 +214,71 @@ namespace BoWeather
             using (SolidBrush coreBrush = new SolidBrush(Color.FromArgb(255, 250, 204, 21)))
             {
                 g.FillEllipse(coreBrush, hx - coreR, hy - coreR, coreR * 2f, coreR * 2f);
+            }
+        }
+    }
+
+    public class ChristmasStarItem
+    {
+        public float X;
+        public float Y;
+        public float Size = 38f;
+        public bool IsGrabbed = false;
+        public float GrabOffsetX = 0f;
+        public float GrabOffsetY = 0f;
+        public IntPtr AttachedWindow = IntPtr.Zero;
+        public float WindowOffsetX = 0f;
+        public float WindowOffsetY = 0f;
+        public bool IsHovered = false;
+        public bool HoverDelete = false;
+
+        public ChristmasStarItem(float x, float y, float size = 38f)
+        {
+            X = x;
+            Y = y;
+            Size = size;
+        }
+
+        public RectangleF GetBounds()
+        {
+            return new RectangleF(X - Size * 0.5f, Y - Size * 0.5f, Size, Size);
+        }
+
+        public RectangleF GetDeleteButtonBounds()
+        {
+            return new RectangleF(X + Size * 0.5f - 8f, Y - Size * 0.5f - 8f, 18f, 18f);
+        }
+
+        public void Draw(Graphics g, float animTick)
+        {
+            float pulse = (float)(0.76 + 0.24 * Math.Sin(animTick * 2.8f + X * 0.015f));
+            float rOut = Size * 0.5f;
+            float rIn = rOut * 0.42f;
+
+            // Radiant golden outer halo
+            using (SolidBrush glow1 = new SolidBrush(Color.FromArgb((int)(65 * pulse), 255, 215, 0)))
+            {
+                g.FillEllipse(glow1, X - rOut * 1.8f, Y - rOut * 1.8f, rOut * 3.6f, rOut * 3.6f);
+            }
+            using (SolidBrush glow2 = new SolidBrush(Color.FromArgb((int)(35 * pulse), 255, 245, 170)))
+            {
+                g.FillEllipse(glow2, X - rOut * 2.6f, Y - rOut * 2.6f, rOut * 5.2f, rOut * 5.2f);
+            }
+
+            // 3D Shaded Star Polygon
+            ChristmasManager.DrawStarPolygon(g, X, Y, rOut, rIn, Color.FromArgb(255, 255, 235, 110), Color.FromArgb(255, 235, 145, 20));
+
+            // Center sparkle
+            using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(240 * pulse), 255, 255, 255)))
+            {
+                g.FillEllipse(glint, X - 2.5f, Y - 2.5f, 5f, 5f);
+            }
+
+            // Delete (X) button on hover
+            if (IsHovered || HoverDelete)
+            {
+                RectangleF delRect = GetDeleteButtonBounds();
+                ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, HoverDelete);
             }
         }
     }
@@ -378,12 +443,10 @@ namespace BoWeather
                              (l % 3 == 1) ? Color.FromArgb(255, 255, 255) :
                                             Color.FromArgb(56, 189, 248);
 
-                // Glow aura
                 using (SolidBrush glow = new SolidBrush(Color.FromArgb((int)(75 * pulse), lCol)))
                 {
                     g.FillEllipse(glow, lx - 5f, ly - 5f, 10f, 10f);
                 }
-                // Center point
                 using (SolidBrush core = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
                 {
                     g.FillEllipse(core, lx - 1.8f, ly - 1.8f, 3.6f, 3.6f);
@@ -401,9 +464,12 @@ namespace BoWeather
             }
             ChristmasManager.DrawStarPolygon(g, starCx, starCy, 14f, 6.2f, Color.FromArgb(255, 215, 0), Color.FromArgb(245, 158, 11));
 
-            // 7. Delete Button (X)
-            RectangleF delRect = GetDeleteButtonBounds();
-            ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, HoverDelete);
+            // 7. Delete Button (X) on hover
+            if (IsHovered || HoverDelete)
+            {
+                RectangleF delRect = GetDeleteButtonBounds();
+                ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, HoverDelete);
+            }
         }
 
         private void DrawPineTier(Graphics g, float cx, float cy, float tierW, float tierH, int tierIndex)
@@ -581,12 +647,10 @@ namespace BoWeather
                 Color.FromArgb((int)(255 * alpha), RibbonColor)))
             using (Pen ribPen = new Pen(Color.FromArgb((int)(70 * alpha), 60, 40, 10), 1f))
             {
-                // Vertical ribbon
                 RectangleF vertRib = new RectangleF(ribbonX, top, ribbonW, h);
                 g.FillRectangle(ribGrad, vertRib);
                 g.DrawRectangle(ribPen, vertRib.X, vertRib.Y, vertRib.Width, vertRib.Height);
 
-                // Horizontal ribbon
                 float horizH = ribbonW * 0.85f;
                 float horizY = top + lidH + (h - lidH) * 0.45f - horizH * 0.5f;
                 RectangleF horizRib = new RectangleF(left + 2f, horizY, w - 4f, horizH);
@@ -618,9 +682,12 @@ namespace BoWeather
                 g.DrawEllipse(bowPen, bowCx - knotR, bowCy - knotR * 0.8f, knotR * 2f, knotR * 1.6f);
             }
 
-            // 6. Delete Button (X)
-            RectangleF delRect = GetDeleteButtonBounds();
-            ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, HoverDelete);
+            // 6. Delete Button (X) on hover
+            if (IsHovered || HoverDelete)
+            {
+                RectangleF delRect = GetDeleteButtonBounds();
+                ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, HoverDelete);
+            }
         }
     }
 
@@ -635,11 +702,12 @@ namespace BoWeather
         public List<ChristmasTreeItem> Trees { get; private set; }
         public List<ChristmasGiftItem> Gifts { get; private set; }
         public List<ChristmasLightsItem> Lights { get; private set; }
+        public List<ChristmasStarItem> Stars { get; private set; }
         public bool ShowSantaHat { get; set; }
 
         public int TotalItemCount
         {
-            get { return Trees.Count + Gifts.Count + Lights.Count; }
+            get { return Trees.Count + Gifts.Count + Lights.Count + Stars.Count; }
         }
 
         private object _grabbedItem = null;
@@ -655,6 +723,7 @@ namespace BoWeather
             Trees = new List<ChristmasTreeItem>();
             Gifts = new List<ChristmasGiftItem>();
             Lights = new List<ChristmasLightsItem>();
+            Stars = new List<ChristmasStarItem>();
             ShowSantaHat = false;
 
             _settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "christmas_settings.txt");
@@ -683,7 +752,17 @@ namespace BoWeather
         public ChristmasLightsItem AddLights(float x1, float y1, float x2, float y2)
         {
             ChristmasLightsItem item = new ChristmasLightsItem(x1, y1, x2, y2);
+            item.IsHovered = true; // Show handles immediately when placed
             Lights.Add(item);
+            SaveSettings();
+            return item;
+        }
+
+        public ChristmasStarItem AddStar(float x, float y, float size = 38f)
+        {
+            ChristmasStarItem item = new ChristmasStarItem(x, y, size);
+            item.IsHovered = true;
+            Stars.Add(item);
             SaveSettings();
             return item;
         }
@@ -705,6 +784,11 @@ namespace BoWeather
                 Lights.Remove((ChristmasLightsItem)item);
                 SaveSettings();
             }
+            else if (item is ChristmasStarItem)
+            {
+                Stars.Remove((ChristmasStarItem)item);
+                SaveSettings();
+            }
         }
 
         public void ClearAll()
@@ -712,6 +796,7 @@ namespace BoWeather
             Trees.Clear();
             Gifts.Clear();
             Lights.Clear();
+            Stars.Clear();
             SaveSettings();
         }
 
@@ -739,11 +824,20 @@ namespace BoWeather
                     l.IsHovered = true;
                     l.HoverPart = PART_HANDLE2;
                 }
-                else if (l.IsNearWire(mouseX, mouseY, 20f))
+                else if (l.IsNearWire(mouseX, mouseY, 24f))
                 {
                     l.IsHovered = true;
                     l.HoverPart = PART_BODY;
                 }
+            }
+
+            for (int i = 0; i < Stars.Count; i++)
+            {
+                ChristmasStarItem s = Stars[i];
+                RectangleF b = s.GetBounds();
+                b.Inflate(8f, 8f);
+                s.IsHovered = b.Contains(mouseX, mouseY);
+                s.HoverDelete = s.GetDeleteButtonBounds().Contains(mouseX, mouseY);
             }
 
             for (int i = 0; i < Trees.Count; i++)
@@ -768,10 +862,19 @@ namespace BoWeather
             // 1. Check Delete Buttons FIRST across all items so (X) click always succeeds
             for (int i = Lights.Count - 1; i >= 0; i--)
             {
-                if (Lights[i].GetDeleteButtonBounds().Contains(mouseX, mouseY))
+                if (Lights[i].IsHovered && Lights[i].GetDeleteButtonBounds().Contains(mouseX, mouseY))
                 {
                     hitPart = PART_DELETE;
                     return Lights[i];
+                }
+            }
+
+            for (int i = Stars.Count - 1; i >= 0; i--)
+            {
+                if (Stars[i].GetDeleteButtonBounds().Contains(mouseX, mouseY))
+                {
+                    hitPart = PART_DELETE;
+                    return Stars[i];
                 }
             }
 
@@ -809,7 +912,20 @@ namespace BoWeather
                 }
             }
 
-            // 3. Check Gifts (clickable / draggable)
+            // 3. Check Stars (clickable / draggable)
+            for (int i = Stars.Count - 1; i >= 0; i--)
+            {
+                ChristmasStarItem s = Stars[i];
+                RectangleF b = s.GetBounds();
+                b.Inflate(8f, 8f);
+                if (b.Contains(mouseX, mouseY))
+                {
+                    hitPart = PART_BODY;
+                    return s;
+                }
+            }
+
+            // 4. Check Gifts (clickable / draggable)
             for (int i = Gifts.Count - 1; i >= 0; i--)
             {
                 ChristmasGiftItem g = Gifts[i];
@@ -822,7 +938,7 @@ namespace BoWeather
                 }
             }
 
-            // 4. Check Trees
+            // 5. Check Trees
             for (int i = Trees.Count - 1; i >= 0; i--)
             {
                 ChristmasTreeItem t = Trees[i];
@@ -835,11 +951,11 @@ namespace BoWeather
                 }
             }
 
-            // 5. Check Lights Wire Body
+            // 6. Check Lights Wire Body
             for (int i = Lights.Count - 1; i >= 0; i--)
             {
                 ChristmasLightsItem l = Lights[i];
-                if (l.IsNearWire(mouseX, mouseY, 16f))
+                if (l.IsNearWire(mouseX, mouseY, 18f))
                 {
                     hitPart = PART_BODY;
                     return l;
@@ -871,6 +987,14 @@ namespace BoWeather
                 {
                     l.IsGrabbedBody = true;
                 }
+            }
+            else if (hit is ChristmasStarItem)
+            {
+                ChristmasStarItem s = (ChristmasStarItem)hit;
+                s.IsGrabbed = true;
+                s.AttachedWindow = IntPtr.Zero;
+                s.GrabOffsetX = mouseX - s.X;
+                s.GrabOffsetY = mouseY - s.Y;
             }
             else if (hit is ChristmasTreeItem)
             {
@@ -923,6 +1047,17 @@ namespace BoWeather
                     l.Y2 += dy;
                 }
             }
+            else if (_grabbedItem is ChristmasStarItem)
+            {
+                ChristmasStarItem s = (ChristmasStarItem)_grabbedItem;
+                s.X = mouseX - s.GrabOffsetX;
+                s.Y = mouseY - s.GrabOffsetY;
+
+                if (Math.Abs(dx) > 4f && onSnowPuff != null && _rand.Next(3) == 0)
+                {
+                    onSnowPuff(s.X, s.Y, 2);
+                }
+            }
             else if (_grabbedItem is ChristmasTreeItem)
             {
                 ChristmasTreeItem t = (ChristmasTreeItem)_grabbedItem;
@@ -957,6 +1092,32 @@ namespace BoWeather
                 l.IsGrabbedHandle1 = false;
                 l.IsGrabbedHandle2 = false;
                 l.IsGrabbedBody = false;
+                SaveSettings();
+            }
+            else if (_grabbedItem is ChristmasStarItem)
+            {
+                ChristmasStarItem s = (ChristmasStarItem)_grabbedItem;
+                s.IsGrabbed = false;
+
+                // Attachment to active window
+                if (winMgr != null)
+                {
+                    List<WindowInfo> windows = winMgr.ActiveWindows;
+                    for (int w = 0; w < windows.Count; w++)
+                    {
+                        WindowInfo win = windows[w];
+                        Rectangle r = win.Bounds;
+                        if (s.X >= r.Left && s.X <= r.Right &&
+                            s.Y >= r.Top - 30f && s.Y <= r.Bottom)
+                        {
+                            s.AttachedWindow = win.Handle;
+                            s.WindowOffsetX = s.X - r.Left;
+                            s.WindowOffsetY = s.Y - r.Top;
+                            if (onSnowPuff != null) onSnowPuff(s.X, s.Y, 6);
+                            break;
+                        }
+                    }
+                }
                 SaveSettings();
             }
             else if (_grabbedItem is ChristmasTreeItem)
@@ -998,7 +1159,6 @@ namespace BoWeather
 
                 if (!placed)
                 {
-                    // Snap safely to floor if released in the air
                     t.Y = floorY - 6f;
                     t.AttachedWindow = IntPtr.Zero;
                 }
@@ -1063,7 +1223,27 @@ namespace BoWeather
         {
             _animTick += 0.045f;
 
-            // 1. Update Trees Window Attachment
+            // 1. Update Stars Window Attachment
+            for (int i = 0; i < Stars.Count; i++)
+            {
+                ChristmasStarItem s = Stars[i];
+                if (!s.IsGrabbed && s.AttachedWindow != IntPtr.Zero && winMgr != null)
+                {
+                    Rectangle curBounds;
+                    bool hasMoved;
+                    if (winMgr.TryGetWindowCurrentBounds(s.AttachedWindow, out curBounds, out hasMoved))
+                    {
+                        s.X = curBounds.Left + s.WindowOffsetX;
+                        s.Y = curBounds.Top + s.WindowOffsetY;
+                    }
+                    else
+                    {
+                        s.AttachedWindow = IntPtr.Zero;
+                    }
+                }
+            }
+
+            // 2. Update Trees Window Attachment
             for (int i = 0; i < Trees.Count; i++)
             {
                 ChristmasTreeItem t = Trees[i];
@@ -1093,7 +1273,7 @@ namespace BoWeather
                 }
             }
 
-            // 2. Update Gifts Physics & Window Attachment
+            // 3. Update Gifts Physics & Window Attachment
             for (int i = Gifts.Count - 1; i >= 0; i--)
             {
                 ChristmasGiftItem g = Gifts[i];
@@ -1168,7 +1348,7 @@ namespace BoWeather
 
         public void Draw(Graphics g, WindowManager winMgr, int screenWidth, int screenHeight, int floorY)
         {
-            // 1. Draw String Lights
+            // 1. Draw String Lights (Pure string with hanging bulbs, no star attached)
             for (int i = 0; i < Lights.Count; i++)
             {
                 Lights[i].Draw(g, _animTick, true);
@@ -1184,6 +1364,12 @@ namespace BoWeather
             for (int i = 0; i < Gifts.Count; i++)
             {
                 Gifts[i].Draw(g);
+            }
+
+            // 4. Draw Stars (Independent radiant golden Christmas stars)
+            for (int i = 0; i < Stars.Count; i++)
+            {
+                Stars[i].Draw(g, _animTick);
             }
         }
 
@@ -1222,7 +1408,6 @@ namespace BoWeather
             float r = isHover ? 11f : 9f;
             Color bg = isHover ? Color.FromArgb(239, 68, 68) : Color.FromArgb(200, 220, 38, 38);
 
-            // Halo
             if (isHover)
             {
                 using (SolidBrush halo = new SolidBrush(Color.FromArgb(80, 239, 68, 68)))
@@ -1231,7 +1416,6 @@ namespace BoWeather
                 }
             }
 
-            // Badge circle
             using (SolidBrush bBrush = new SolidBrush(bg))
             {
                 g.FillEllipse(bBrush, cx - r, cy - r, r * 2f, r * 2f);
@@ -1241,7 +1425,6 @@ namespace BoWeather
                 g.DrawEllipse(borderPen, cx - r, cy - r, r * 2f, r * 2f);
             }
 
-            // White 'X' symbol
             float xSize = r * 0.45f;
             using (Pen xPen = new Pen(Color.White, 1.8f))
             {
@@ -1276,6 +1459,11 @@ namespace BoWeather
                         l.X1, l.Y1, l.X2, l.Y2));
                 }
 
+                foreach (ChristmasStarItem s in Stars)
+                {
+                    lines.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "star={0:F1},{1:F1}", s.X, s.Y));
+                }
+
                 File.WriteAllLines(_settingsPath, lines.ToArray());
             }
             catch { }
@@ -1288,6 +1476,7 @@ namespace BoWeather
                 Trees.Clear();
                 Gifts.Clear();
                 Lights.Clear();
+                Stars.Clear();
 
                 if (!File.Exists(_settingsPath)) return;
                 string[] lines = File.ReadAllLines(_settingsPath);
@@ -1353,6 +1542,19 @@ namespace BoWeather
                                 float.TryParse(parts[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out y2))
                             {
                                 Lights.Add(new ChristmasLightsItem(x1, y1, x2, y2));
+                            }
+                        }
+                    }
+                    else if (key == "star")
+                    {
+                        string[] parts = val.Split(',');
+                        if (parts.Length >= 2)
+                        {
+                            float sx, sy;
+                            if (float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out sx) &&
+                                float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out sy))
+                            {
+                                Stars.Add(new ChristmasStarItem(sx, sy));
                             }
                         }
                     }
