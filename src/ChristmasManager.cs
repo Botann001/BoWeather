@@ -1770,7 +1770,7 @@ namespace BoWeather
                 t.IsGrabbed = false;
                 bool placed = false;
 
-                // Land on floating window top
+                // Attach to window if released on or near active window
                 if (winMgr != null)
                 {
                     List<WindowInfo> windows = winMgr.ActiveWindows;
@@ -1779,12 +1779,11 @@ namespace BoWeather
                         WindowInfo win = windows[w];
                         Rectangle r = win.Bounds;
                         if (t.X >= r.Left && t.X <= r.Right &&
-                            t.Y >= r.Top - 45f && t.Y <= r.Top + 25f)
+                            t.Y >= r.Top - 35f && t.Y <= r.Bottom)
                         {
-                            t.Y = r.Top;
                             t.AttachedWindow = win.Handle;
                             t.WindowOffsetX = t.X - r.Left;
-                            t.WindowOffsetY = r.Top - t.Y;
+                            t.WindowOffsetY = t.Y - r.Top;
                             placed = true;
                             if (onSnowPuff != null) onSnowPuff(t.X, t.Y, 8);
                             break;
@@ -1792,8 +1791,8 @@ namespace BoWeather
                     }
                 }
 
-                // Land on Taskbar
-                if (!placed && t.Y >= floorY - 70f)
+                // Snap to Taskbar snow floor only if placed near taskbar
+                if (!placed && t.Y >= floorY - 35f)
                 {
                     t.Y = floorY - 6f;
                     t.AttachedWindow = IntPtr.Zero;
@@ -1801,10 +1800,11 @@ namespace BoWeather
                     if (onSnowPuff != null) onSnowPuff(t.X, t.Y, 8);
                 }
 
+                // Free placement on desktop: stays exactly at (t.X, t.Y)
                 if (!placed)
                 {
-                    t.Y = floorY - 6f;
                     t.AttachedWindow = IntPtr.Zero;
+                    if (onSnowPuff != null) onSnowPuff(t.X, t.Y, 6);
                 }
 
                 SaveSettings();
@@ -1823,15 +1823,14 @@ namespace BoWeather
                         WindowInfo win = windows[w];
                         Rectangle r = win.Bounds;
                         if (g.X >= r.Left && g.X <= r.Right &&
-                            g.Y >= r.Top - 35f && g.Y <= r.Top + 20f)
+                            g.Y >= r.Top - 30f && g.Y <= r.Bottom)
                         {
-                            g.Y = r.Top;
                             g.Vx = 0f;
                             g.Vy = 0f;
                             g.IsFalling = false;
                             g.AttachedWindow = win.Handle;
                             g.WindowOffsetX = g.X - r.Left;
-                            g.WindowOffsetY = r.Top - g.Y;
+                            g.WindowOffsetY = g.Y - r.Top;
                             placed = true;
                             if (onSnowPuff != null) onSnowPuff(g.X, g.Y, 5);
                             break;
@@ -1839,7 +1838,7 @@ namespace BoWeather
                     }
                 }
 
-                if (!placed && g.Y >= floorY - 50f)
+                if (!placed && g.Y >= floorY - 25f)
                 {
                     g.Y = floorY - 6f;
                     g.Vx = 0f;
@@ -1850,10 +1849,14 @@ namespace BoWeather
                     if (onSnowPuff != null) onSnowPuff(g.X, g.Y, 5);
                 }
 
+                // Free placement on desktop
                 if (!placed)
                 {
-                    g.IsFalling = true;
+                    g.Vx = 0f;
+                    g.Vy = 0f;
+                    g.IsFalling = false;
                     g.AttachedWindow = IntPtr.Zero;
+                    if (onSnowPuff != null) onSnowPuff(g.X, g.Y, 5);
                 }
 
                 SaveSettings();
@@ -1872,12 +1875,11 @@ namespace BoWeather
                         WindowInfo win = windows[w];
                         Rectangle r = win.Bounds;
                         if (o.X >= r.Left && o.X <= r.Right &&
-                            o.Y >= r.Top - 35f && o.Y <= r.Top + 20f)
+                            o.Y >= r.Top - 30f && o.Y <= r.Bottom)
                         {
-                            o.Y = r.Top;
                             o.AttachedWindow = win.Handle;
                             o.WindowOffsetX = o.X - r.Left;
-                            o.WindowOffsetY = r.Top - o.Y;
+                            o.WindowOffsetY = o.Y - r.Top;
                             placed = true;
                             if (onSnowPuff != null) onSnowPuff(o.X, o.Y, 5);
                             break;
@@ -1885,9 +1887,17 @@ namespace BoWeather
                     }
                 }
 
-                if (!placed)
+                if (!placed && o.Y >= floorY - 25f)
                 {
                     o.Y = floorY - 6f;
+                    o.AttachedWindow = IntPtr.Zero;
+                    placed = true;
+                    if (onSnowPuff != null) onSnowPuff(o.X, o.Y, 5);
+                }
+
+                // Free placement on desktop: stays exactly at (o.X, o.Y)
+                if (!placed)
+                {
                     o.AttachedWindow = IntPtr.Zero;
                     if (onSnowPuff != null) onSnowPuff(o.X, o.Y, 5);
                 }
@@ -1933,22 +1943,12 @@ namespace BoWeather
                     bool hasMoved;
                     if (winMgr.TryGetWindowCurrentBounds(t.AttachedWindow, out curBounds, out hasMoved))
                     {
-                        if (t.X < curBounds.Left - 10f || t.X > curBounds.Right + 10f)
-                        {
-                            t.AttachedWindow = IntPtr.Zero;
-                            t.Y = floorY - 6f;
-                            if (onSnowPuff != null) onSnowPuff(t.X, t.Y, 8);
-                        }
-                        else
-                        {
-                            t.X = curBounds.Left + t.WindowOffsetX;
-                            t.Y = curBounds.Top - t.WindowOffsetY;
-                        }
+                        t.X = curBounds.Left + t.WindowOffsetX;
+                        t.Y = curBounds.Top + t.WindowOffsetY;
                     }
                     else
                     {
                         t.AttachedWindow = IntPtr.Zero;
-                        t.Y = floorY - 6f;
                     }
                 }
             }
@@ -1966,32 +1966,8 @@ namespace BoWeather
                     g.Y += g.Vy;
                     g.Vx *= 0.98f;
 
-                    // Landing on window
-                    if (winMgr != null)
-                    {
-                        List<WindowInfo> windows = winMgr.ActiveWindows;
-                        for (int w = 0; w < windows.Count; w++)
-                        {
-                            WindowInfo win = windows[w];
-                            Rectangle r = win.Bounds;
-                            if (g.X >= r.Left && g.X <= r.Right &&
-                                g.Y >= r.Top && (g.Y - g.Vy) <= r.Top + 16f)
-                            {
-                                g.Y = r.Top;
-                                g.Vy = 0f;
-                                g.Vx = 0f;
-                                g.IsFalling = false;
-                                g.AttachedWindow = win.Handle;
-                                g.WindowOffsetX = g.X - r.Left;
-                                g.WindowOffsetY = r.Top - g.Y;
-                                if (onSnowPuff != null) onSnowPuff(g.X, g.Y, 5);
-                                break;
-                            }
-                        }
-                    }
-
                     // Landing on Taskbar
-                    if (g.IsFalling && g.Y >= floorY - 6f)
+                    if (g.Y >= floorY - 6f)
                     {
                         g.Y = floorY - 6f;
                         g.Vy = 0f;
@@ -2007,20 +1983,13 @@ namespace BoWeather
                     bool hasMoved;
                     if (winMgr.TryGetWindowCurrentBounds(g.AttachedWindow, out curBounds, out hasMoved))
                     {
-                        if (g.X < curBounds.Left - 8f || g.X > curBounds.Right + 8f)
-                        {
-                            g.AttachedWindow = IntPtr.Zero;
-                            g.IsFalling = true;
-                            g.Vy = 2.0f;
-                            continue;
-                        }
                         g.X = curBounds.Left + g.WindowOffsetX;
-                        g.Y = curBounds.Top - g.WindowOffsetY;
+                        g.Y = curBounds.Top + g.WindowOffsetY;
                     }
                     else
                     {
                         g.AttachedWindow = IntPtr.Zero;
-                        g.IsFalling = true;
+                        g.IsFalling = false;
                     }
                 }
             }
@@ -2035,22 +2004,12 @@ namespace BoWeather
                     bool hasMoved;
                     if (winMgr.TryGetWindowCurrentBounds(o.AttachedWindow, out curBounds, out hasMoved))
                     {
-                        if (o.X < curBounds.Left - 10f || o.X > curBounds.Right + 10f)
-                        {
-                            o.AttachedWindow = IntPtr.Zero;
-                            o.Y = floorY - 6f;
-                            if (onSnowPuff != null) onSnowPuff(o.X, o.Y, 5);
-                        }
-                        else
-                        {
-                            o.X = curBounds.Left + o.WindowOffsetX;
-                            o.Y = curBounds.Top - o.WindowOffsetY;
-                        }
+                        o.X = curBounds.Left + o.WindowOffsetX;
+                        o.Y = curBounds.Top + o.WindowOffsetY;
                     }
                     else
                     {
                         o.AttachedWindow = IntPtr.Zero;
-                        o.Y = floorY - 6f;
                     }
                 }
             }

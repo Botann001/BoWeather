@@ -695,8 +695,8 @@ namespace BoWeather
                         }
                     }
 
-                    float spawnX = screen.Left + screen.Width * 0.72f;
-                    float spawnY = floorY - 6f;
+                    float spawnX = screen.Left + screen.Width * 0.70f;
+                    float spawnY = screen.Top + screen.Height * 0.65f;
                     if (_mgr.Trees.Count > 0)
                     {
                         spawnX = screen.Left + screen.Width * 0.45f + (_mgr.Trees.Count * 65f) % (screen.Width * 0.4f);
@@ -770,8 +770,8 @@ namespace BoWeather
                     break;
 
                 case "gift":
-                    float gx = screen.Left + screen.Width * 0.60f + rndOffset;
-                    float gy = floorY - 6f;
+                    float gx = screen.Left + screen.Width * 0.55f + rndOffset;
+                    float gy = screen.Top + screen.Height * 0.60f;
                     _giftColorIdx = (_giftColorIdx + 1) % _giftColors.Length;
                     _mgr.AddGift(gx, gy, _giftColors[_giftColorIdx], _ribbonColors[_giftColorIdx]);
                     _overlay.Particles.SpawnSnowPuff(gx, gy, 10);
@@ -788,7 +788,7 @@ namespace BoWeather
                 default:
                     // Any general ornament (candle, redbauble, goldbauble, wreath, stocking, candycane, bells, gingerbread, holly, snowglobe, cocoa, boat)
                     float ox = screen.Left + screen.Width * 0.40f + rndOffset;
-                    float oy = floorY - 6f;
+                    float oy = screen.Top + screen.Height * 0.48f + ((_mgr.Ornaments.Count * 22f) % (screen.Height * 0.22f));
                     _mgr.AddOrnament(id, ox, oy);
                     _overlay.Particles.SpawnSnowPuff(ox, oy, 12);
                     break;
