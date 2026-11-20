@@ -134,10 +134,22 @@ namespace BoWeather
 
         private readonly IntPtr _selfHandle;
         private readonly List<WindowInfo> _windows = new List<WindowInfo>();
+        private readonly List<Rectangle> _allAppBounds = new List<Rectangle>();
         private readonly object _lock = new object();
         private DateTime _lastScanTime = DateTime.MinValue;
         private int _screenWidth;
         private int _screenHeight;
+
+        public List<Rectangle> AllAppBounds
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return new List<Rectangle>(_allAppBounds);
+                }
+            }
+        }
 
         public float[] FloorSnowPoints;
         public float[] MaxFloorSnowPoints;
@@ -282,6 +294,7 @@ namespace BoWeather
 
             List<WindowInfo> scanned = new List<WindowInfo>();
             List<Rectangle> coveredRects = new List<Rectangle>();
+            List<Rectangle> scannedAppBounds = new List<Rectangle>();
             bool stopEnumeration = false;
 
             StringBuilder classNameBuffer = new StringBuilder(256);
@@ -350,6 +363,8 @@ namespace BoWeather
                 int h = rect.Bottom - rect.Top;
                 if (w < 250 || h < 150) return true;
 
+                scannedAppBounds.Add(new Rectangle(rect.Left, rect.Top, w, h));
+
                 // Check if this window is MAXIMIZED or FULLSCREEN
                 bool isMaximized = IsZoomed(hWnd) || ((style & WS_MAXIMIZE) != 0);
                 if (!isMaximized)
@@ -409,6 +424,9 @@ namespace BoWeather
 
             lock (_lock)
             {
+                _allAppBounds.Clear();
+                _allAppBounds.AddRange(scannedAppBounds);
+
                 Dictionary<IntPtr, WindowInfo> prevMap = new Dictionary<IntPtr, WindowInfo>();
                 for (int i = 0; i < _windows.Count; i++)
                 {

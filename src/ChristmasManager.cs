@@ -704,6 +704,7 @@ namespace BoWeather
         public List<ChristmasLightsItem> Lights { get; private set; }
         public List<ChristmasStarItem> Stars { get; private set; }
         public bool ShowSantaHat { get; set; }
+        public bool BehindActiveWindows { get; set; }
 
         public int TotalItemCount
         {
@@ -725,6 +726,7 @@ namespace BoWeather
             Lights = new List<ChristmasLightsItem>();
             Stars = new List<ChristmasStarItem>();
             ShowSantaHat = false;
+            BehindActiveWindows = true;
 
             _settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "christmas_settings.txt");
             LoadSettings();
@@ -1348,28 +1350,52 @@ namespace BoWeather
 
         public void Draw(Graphics g, WindowManager winMgr, int screenWidth, int screenHeight, int floorY)
         {
-            // 1. Draw String Lights (Pure string with hanging bulbs, no star attached)
-            for (int i = 0; i < Lights.Count; i++)
+            GraphicsState gState = g.Save();
+            try
             {
-                Lights[i].Draw(g, _animTick, true);
-            }
+                if (BehindActiveWindows && winMgr != null)
+                {
+                    List<Rectangle> appBounds = winMgr.AllAppBounds;
+                    if (appBounds != null)
+                    {
+                        for (int b = 0; b < appBounds.Count; b++)
+                        {
+                            Rectangle r = appBounds[b];
+                            if (r.Width > 50 && r.Height > 50)
+                            {
+                                g.ExcludeClip(r);
+                            }
+                        }
+                    }
+                }
 
-            // 2. Draw Trees
-            for (int i = 0; i < Trees.Count; i++)
-            {
-                Trees[i].Draw(g, _animTick);
-            }
+                // 1. Draw String Lights (Pure string with hanging bulbs, no star attached)
+                for (int i = 0; i < Lights.Count; i++)
+                {
+                    Lights[i].Draw(g, _animTick, true);
+                }
 
-            // 3. Draw Gifts
-            for (int i = 0; i < Gifts.Count; i++)
-            {
-                Gifts[i].Draw(g);
-            }
+                // 2. Draw Trees
+                for (int i = 0; i < Trees.Count; i++)
+                {
+                    Trees[i].Draw(g, _animTick);
+                }
 
-            // 4. Draw Stars (Independent radiant golden Christmas stars)
-            for (int i = 0; i < Stars.Count; i++)
+                // 3. Draw Gifts
+                for (int i = 0; i < Gifts.Count; i++)
+                {
+                    Gifts[i].Draw(g);
+                }
+
+                // 4. Draw Stars (Independent radiant golden Christmas stars)
+                for (int i = 0; i < Stars.Count; i++)
+                {
+                    Stars[i].Draw(g, _animTick);
+                }
+            }
+            finally
             {
-                Stars[i].Draw(g, _animTick);
+                g.Restore(gState);
             }
         }
 
@@ -1441,6 +1467,7 @@ namespace BoWeather
             {
                 List<string> lines = new List<string>();
                 lines.Add("santahat=" + ShowSantaHat.ToString().ToLower());
+                lines.Add("behindwindows=" + BehindActiveWindows.ToString().ToLower());
 
                 foreach (ChristmasTreeItem t in Trees)
                 {
@@ -1493,6 +1520,10 @@ namespace BoWeather
                     if (key == "santahat")
                     {
                         ShowSantaHat = (val.ToLower() == "true");
+                    }
+                    else if (key == "behindwindows")
+                    {
+                        BehindActiveWindows = (val.ToLower() == "true");
                     }
                     else if (key == "tree")
                     {

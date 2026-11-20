@@ -486,8 +486,20 @@ namespace BoWeather
                             return (IntPtr)1; // Consume event! No Desktop Selection Box!
                         }
 
-                        // 1.5. Did the user click on a Christmas accessory (Delete button, Light handle, Tree, or Gift)?
-                        if (_particleSystem.Christmas != null)
+                        // 1.5. Did the user click on a Christmas accessory (Delete button, Light handle, Tree, Star, or Gift)?
+                        bool canInteractChristmas = true;
+                        if (_particleSystem.Christmas != null && _particleSystem.Christmas.BehindActiveWindows)
+                        {
+                            IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
+                            IntPtr rootWnd = GetAncestor(wndUnderCursor, GA_ROOT);
+                            if (rootWnd == IntPtr.Zero) rootWnd = wndUnderCursor;
+                            if (!IsDesktopOrTaskbarWindow(rootWnd) && rootWnd != this.Handle)
+                            {
+                                canInteractChristmas = false;
+                            }
+                        }
+
+                        if (canInteractChristmas && _particleSystem.Christmas != null)
                         {
                             int hitPart;
                             object xHit = _particleSystem.Christmas.HitTest(mouseX, mouseY, out hitPart);
@@ -552,7 +564,27 @@ namespace BoWeather
                     {
                         if (_particleSystem.Christmas != null)
                         {
-                            _particleSystem.Christmas.UpdateHover(mouseX, mouseY);
+                            bool isOverApp = false;
+                            if (_particleSystem.Christmas.BehindActiveWindows && !_isChristmasInteracting)
+                            {
+                                IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
+                                IntPtr rootWnd = GetAncestor(wndUnderCursor, GA_ROOT);
+                                if (rootWnd == IntPtr.Zero) rootWnd = wndUnderCursor;
+                                if (!IsDesktopOrTaskbarWindow(rootWnd) && rootWnd != this.Handle)
+                                {
+                                    isOverApp = true;
+                                }
+                            }
+
+                            if (isOverApp)
+                            {
+                                _particleSystem.Christmas.UpdateHover(-9999, -9999);
+                            }
+                            else
+                            {
+                                _particleSystem.Christmas.UpdateHover(mouseX, mouseY);
+                            }
+
                             if (_isChristmasInteracting)
                             {
                                 int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
@@ -596,7 +628,19 @@ namespace BoWeather
                     else if (msg == WM_RBUTTONDOWN)
                     {
                         // Right-click on Christmas Accessory to immediately delete it!
-                        if (_particleSystem.Christmas != null)
+                        bool canInteractChristmas = true;
+                        if (_particleSystem.Christmas != null && _particleSystem.Christmas.BehindActiveWindows)
+                        {
+                            IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
+                            IntPtr rootWnd = GetAncestor(wndUnderCursor, GA_ROOT);
+                            if (rootWnd == IntPtr.Zero) rootWnd = wndUnderCursor;
+                            if (!IsDesktopOrTaskbarWindow(rootWnd) && rootWnd != this.Handle)
+                            {
+                                canInteractChristmas = false;
+                            }
+                        }
+
+                        if (canInteractChristmas && _particleSystem.Christmas != null)
                         {
                             int hitPart;
                             object xHit = _particleSystem.Christmas.HitTest(mouseX, mouseY, out hitPart);
