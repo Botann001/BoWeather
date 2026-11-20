@@ -287,8 +287,8 @@ namespace BoWeather
     {
         public float X;
         public float Y;
-        public float Width = 96f;
-        public float Height = 138f;
+        public float Width = 108f;
+        public float Height = 148f;
         public bool IsGrabbed = false;
         public float GrabOffsetX = 0f;
         public float GrabOffsetY = 0f;
@@ -297,6 +297,49 @@ namespace BoWeather
         public float WindowOffsetY = 0f;
         public bool IsHovered = false;
         public bool HoverDelete = false;
+
+        private struct BaubleInfo
+        {
+            public float XRel, YRel, Radius;
+            public Color Color;
+            public BaubleInfo(float xr, float yr, float r, Color c) { XRel = xr; YRel = yr; Radius = r; Color = c; }
+        }
+
+        private struct LightInfo
+        {
+            public float XRel, YRel;
+            public Color Color;
+            public float Phase;
+            public LightInfo(float xr, float yr, Color c, float p) { XRel = xr; YRel = yr; Color = c; Phase = p; }
+        }
+
+        private static readonly BaubleInfo[] _baubles = new BaubleInfo[]
+        {
+            new BaubleInfo(0.04f,  -0.67f, 6.2f, Color.FromArgb(255, 85, 145)),  // Candy Pink (top cone)
+            new BaubleInfo(-0.14f, -0.56f, 5.8f, Color.FromArgb(125, 215, 255)), // Sky Blue (upper left)
+            new BaubleInfo(-0.22f, -0.39f, 6.8f, Color.FromArgb(242, 34, 52)),   // Ruby Red (mid left)
+            new BaubleInfo(0.26f,  -0.37f, 7.0f, Color.FromArgb(255, 185, 15)),  // Shiny Gold (mid right)
+            new BaubleInfo(-0.28f, -0.22f, 6.5f, Color.FromArgb(125, 215, 255)), // Sky Blue (lower left)
+            new BaubleInfo(-0.07f, -0.15f, 7.0f, Color.FromArgb(255, 185, 15)),  // Shiny Gold (lower mid-left)
+            new BaubleInfo(0.30f,  -0.20f, 6.5f, Color.FromArgb(255, 85, 145)),  // Candy Pink (lower right)
+            new BaubleInfo(0.06f,  -0.07f, 7.0f, Color.FromArgb(242, 34, 52))    // Ruby Red (bottom center)
+        };
+
+        private static readonly LightInfo[] _fairyLights = new LightInfo[]
+        {
+            new LightInfo(0.17f,  -0.65f, Color.FromArgb(255, 240, 130), 0.0f),
+            new LightInfo(-0.04f, -0.60f, Color.FromArgb(255, 215, 75),  1.3f),
+            new LightInfo(0.09f,  -0.54f, Color.FromArgb(255, 175, 65),  2.6f),
+            new LightInfo(-0.03f, -0.44f, Color.FromArgb(255, 248, 155), 0.9f),
+            new LightInfo(0.12f,  -0.42f, Color.FromArgb(255, 215, 75),  3.2f),
+            new LightInfo(-0.13f, -0.31f, Color.FromArgb(255, 240, 130), 1.8f),
+            new LightInfo(0.09f,  -0.29f, Color.FromArgb(255, 185, 85),  4.1f),
+            new LightInfo(0.20f,  -0.30f, Color.FromArgb(255, 248, 165), 2.5f),
+            new LightInfo(-0.30f, -0.14f, Color.FromArgb(255, 215, 75),  0.6f),
+            new LightInfo(-0.17f, -0.13f, Color.FromArgb(255, 248, 165), 3.7f),
+            new LightInfo(0.22f,  -0.11f, Color.FromArgb(255, 240, 130), 1.5f),
+            new LightInfo(0.34f,  -0.14f, Color.FromArgb(255, 215, 75),  4.8f)
+        };
 
         public ChristmasTreeItem(float x, float y)
         {
@@ -321,148 +364,65 @@ namespace BoWeather
             float w = Width;
             float h = Height;
 
-            // 1. Soft contact shadow under the base
-            float shadowW = w * 0.95f;
-            float shadowH = 14f;
-            using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb(60, 15, 30, 45)))
+            // 0. Soft contact shadow on ground / taskbar
+            float shadowW = w * 0.88f;
+            float shadowH = 12f;
+            using (GraphicsPath sp = new GraphicsPath())
             {
-                g.FillEllipse(shadowBrush, cx - shadowW * 0.5f, cy - shadowH * 0.5f, shadowW, shadowH);
+                sp.AddEllipse(cx - shadowW * 0.5f, cy - shadowH * 0.5f, shadowW, shadowH);
+                using (PathGradientBrush pgb = new PathGradientBrush(sp))
+                {
+                    pgb.CenterColor = Color.FromArgb(120, 15, 25, 40);
+                    pgb.SurroundColors = new Color[] { Color.FromArgb(0, 15, 25, 40) };
+                    g.FillPath(pgb, sp);
+                }
             }
 
-            // 2. Wooden Trunk
-            float trunkW = 18f;
-            float trunkH = 26f;
+            // 1. Trunk (rounded warm wood with vertical grain lines)
+            float trunkW = w * 0.17f;
+            float trunkH = h * 0.13f;
             RectangleF trunkRect = new RectangleF(cx - trunkW * 0.5f, cy - trunkH, trunkW, trunkH);
-            using (GraphicsPath tp = VectorIcons.CreateRoundedRect(trunkRect, 3f))
-            using (LinearGradientBrush trunkGrad = new LinearGradientBrush(
-                new PointF(trunkRect.Left, trunkRect.Top),
-                new PointF(trunkRect.Right, trunkRect.Top),
-                Color.FromArgb(255, 120, 74, 42),
-                Color.FromArgb(255, 78, 46, 22)))
+            using (GraphicsPath tp = VectorIcons.CreateRoundedRect(trunkRect, 4f))
             {
-                g.FillPath(trunkGrad, tp);
-            }
-
-            // 3. Three Cascading Tiers of Pine Foliage
-            DrawPineTier(g, cx, cy - 20f, w * 0.96f, 44f, 0);
-            DrawPineTier(g, cx, cy - 54f, w * 0.76f, 38f, 1);
-            DrawPineTier(g, cx, cy - 84f, w * 0.54f, 36f, 2);
-
-            // 4. Glossy Colorful Baubles
-            PointF[] baublePos = new PointF[]
-            {
-                new PointF(cx - 28f, cy - 32f),
-                new PointF(cx + 26f, cy - 35f),
-                new PointF(cx - 8f,  cy - 40f),
-                new PointF(cx + 36f, cy - 38f),
-                new PointF(cx - 22f, cy - 64f),
-                new PointF(cx + 18f, cy - 66f),
-                new PointF(cx - 4f,  cy - 72f),
-                new PointF(cx + 24f, cy - 70f),
-                new PointF(cx - 10f, cy - 95f),
-                new PointF(cx + 11f, cy - 97f)
-            };
-
-            Color[] baubleColors = new Color[]
-            {
-                Color.FromArgb(220, 38, 38),   // Crimson Red
-                Color.FromArgb(250, 204, 21),  // Shiny Gold
-                Color.FromArgb(14, 165, 233),  // Sky Blue
-                Color.FromArgb(236, 72, 153),  // Pink
-                Color.FromArgb(250, 204, 21),  // Shiny Gold
-                Color.FromArgb(220, 38, 38),   // Crimson Red
-                Color.FromArgb(224, 242, 254), // Ice White
-                Color.FromArgb(236, 72, 153),  // Pink
-                Color.FromArgb(220, 38, 38),   // Crimson Red
-                Color.FromArgb(250, 204, 21)   // Shiny Gold
-            };
-
-            for (int b = 0; b < baublePos.Length; b++)
-            {
-                float bx = baublePos[b].X;
-                float by = baublePos[b].Y;
-                float br = 5.2f;
-                Color bCol = baubleColors[b % baubleColors.Length];
-
-                // Cap hanging wire
-                using (Pen capPen = new Pen(Color.FromArgb(120, 60, 40, 10), 1f))
+                using (LinearGradientBrush tGrad = new LinearGradientBrush(
+                    new PointF(trunkRect.Left, trunkRect.Top),
+                    new PointF(trunkRect.Right, trunkRect.Top),
+                    Color.FromArgb(255, 205, 125, 58),
+                    Color.FromArgb(255, 145, 78, 30)))
                 {
-                    g.DrawLine(capPen, bx, by - br - 3f, bx, by - br);
+                    g.FillPath(tGrad, tp);
                 }
-
-                // Bauble 3D Sphere
-                using (GraphicsPath bp = new GraphicsPath())
+                using (Pen grain = new Pen(Color.FromArgb(50, 255, 255, 255), 1f))
                 {
-                    bp.AddEllipse(bx - br, by - br, br * 2f, br * 2f);
-                    Color darkB = Color.FromArgb(
-                        (int)(bCol.R * 0.65f),
-                        (int)(bCol.G * 0.65f),
-                        (int)(bCol.B * 0.65f));
-
-                    using (LinearGradientBrush bGrad = new LinearGradientBrush(
-                        new PointF(bx - br * 0.5f, by - br * 0.5f),
-                        new PointF(bx + br, by + br),
-                        bCol, darkB))
-                    {
-                        g.FillPath(bGrad, bp);
-                    }
+                    g.DrawLine(grain, cx - trunkW * 0.18f, cy - trunkH + 2f, cx - trunkW * 0.18f, cy - 1f);
+                    g.DrawLine(grain, cx + trunkW * 0.15f, cy - trunkH + 2f, cx + trunkW * 0.15f, cy - 2f);
                 }
-
-                // Specular Glint
-                using (SolidBrush glint = new SolidBrush(Color.FromArgb(210, 255, 255, 255)))
+                using (Pen tRim = new Pen(Color.FromArgb(90, 85, 42, 15), 1f))
                 {
-                    g.FillEllipse(glint, bx - br * 0.45f, by - br * 0.45f, br * 0.65f, br * 0.65f);
+                    g.DrawPath(tRim, tp);
                 }
             }
 
-            // 5. Twinkling Tree Lights
-            PointF[] lightPos = new PointF[]
-            {
-                new PointF(cx - 16f, cy - 30f),
-                new PointF(cx + 8f,  cy - 34f),
-                new PointF(cx - 36f, cy - 28f),
-                new PointF(cx + 34f, cy - 29f),
-                new PointF(cx - 12f, cy - 60f),
-                new PointF(cx + 8f,  cy - 62f),
-                new PointF(cx - 24f, cy - 58f),
-                new PointF(cx + 25f, cy - 59f),
-                new PointF(cx - 4f,  cy - 88f),
-                new PointF(cx + 5f,  cy - 92f),
-                new PointF(cx - 14f, cy - 87f),
-                new PointF(cx + 15f, cy - 89f)
-            };
+            // 2. The 4 Cascading Pine Tiers (Bottom Tier 4 up to Top Tier 1)
+            float baseCy = cy - trunkH * 0.42f;
 
-            for (int l = 0; l < lightPos.Length; l++)
-            {
-                float lx = lightPos[l].X;
-                float ly = lightPos[l].Y;
-                float pulse = (float)(0.60 + 0.40 * Math.Sin(animTick * 3.5f + l * 0.85f));
-                int alpha = (int)(255 * pulse);
+            DrawTier(g, cx, baseCy, w * 1.00f, h * 0.38f, 5, 4);
+            DrawTier(g, cx, baseCy - h * 0.18f, w * 0.84f, h * 0.35f, 4, 3);
+            DrawTier(g, cx, baseCy - h * 0.35f, w * 0.67f, h * 0.33f, 3, 2);
+            DrawTier(g, cx, baseCy - h * 0.52f, w * 0.48f, h * 0.35f, 3, 1);
 
-                Color lCol = (l % 3 == 0) ? Color.FromArgb(255, 235, 59) :
-                             (l % 3 == 1) ? Color.FromArgb(255, 255, 255) :
-                                            Color.FromArgb(56, 189, 248);
+            // 3. Snow mounds resting naturally on branch tips & shoulders
+            DrawTreeSnow(g, cx, baseCy, w, h);
 
-                using (SolidBrush glow = new SolidBrush(Color.FromArgb((int)(75 * pulse), lCol)))
-                {
-                    g.FillEllipse(glow, lx - 5f, ly - 5f, 10f, 10f);
-                }
-                using (SolidBrush core = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
-                {
-                    g.FillEllipse(core, lx - 1.8f, ly - 1.8f, 3.6f, 3.6f);
-                }
-            }
+            // 4. Fairy Light Garlands with twinkling warm glow
+            DrawFairyLights(g, cx, cy, w, h, animTick);
 
-            // 6. Radiant Golden Star ⭐ on Tree Peak
-            float starCx = cx;
-            float starCy = cy - 120f;
-            float starPulse = (float)(0.80 + 0.20 * Math.Sin(animTick * 2.8f));
+            // 5. Glossy Colorful Baubles
+            DrawBaubles(g, cx, cy, w, h);
 
-            using (SolidBrush starGlow = new SolidBrush(Color.FromArgb((int)(65 * starPulse), 255, 215, 0)))
-            {
-                g.FillEllipse(starGlow, starCx - 22f, starCy - 22f, 44f, 44f);
-            }
-            ChristmasManager.DrawStarPolygon(g, starCx, starCy, 14f, 6.2f, Color.FromArgb(255, 215, 0), Color.FromArgb(245, 158, 11));
+            // 6. Radiant Golden Star on peak
+            float starCy = baseCy - h * 0.84f;
+            DrawPeakStar(g, cx, starCy, 12.5f, animTick);
 
             // 7. Delete Button (X) on hover
             if (IsHovered || HoverDelete)
@@ -472,59 +432,224 @@ namespace BoWeather
             }
         }
 
-        private void DrawPineTier(Graphics g, float cx, float cy, float tierW, float tierH, int tierIndex)
+        private void DrawTier(Graphics g, float cx, float cy, float tw, float th, int lobes, int tierIdx)
         {
-            float halfW = tierW * 0.5f;
-            float topY = cy - tierH;
+            float halfW = tw * 0.5f;
+            float topY = cy - th;
             float botY = cy;
 
-            PointF[] pts = new PointF[]
+            using (GraphicsPath path = new GraphicsPath())
             {
-                new PointF(cx, topY),
-                new PointF(cx + halfW * 0.35f, topY + tierH * 0.35f),
-                new PointF(cx + halfW * 0.28f, topY + tierH * 0.40f),
-                new PointF(cx + halfW * 0.68f, topY + tierH * 0.72f),
-                new PointF(cx + halfW * 0.58f, topY + tierH * 0.76f),
-                new PointF(cx + halfW, botY),
-                new PointF(cx + halfW * 0.65f, botY - 5f),
-                new PointF(cx + halfW * 0.35f, botY - 3f),
-                new PointF(cx, botY - 6f),
-                new PointF(cx - halfW * 0.35f, botY - 3f),
-                new PointF(cx - halfW * 0.65f, botY - 5f),
-                new PointF(cx - halfW, botY),
-                new PointF(cx - halfW * 0.58f, topY + tierH * 0.76f),
-                new PointF(cx - halfW * 0.68f, topY + tierH * 0.72f),
-                new PointF(cx - halfW * 0.28f, topY + tierH * 0.40f),
-                new PointF(cx - halfW * 0.35f, topY + tierH * 0.35f)
-            };
+                PointF topPt = new PointF(cx, topY);
+                PointF rightTip = new PointF(cx + halfW, botY - th * 0.08f);
+                PointF leftTip = new PointF(cx - halfW, botY - th * 0.08f);
 
-            using (GraphicsPath gp = new GraphicsPath())
-            {
-                gp.AddPolygon(pts);
+                PointF ctrlR1 = new PointF(cx + halfW * 0.22f, topY + th * 0.22f);
+                PointF ctrlR2 = new PointF(cx + halfW * 0.96f, topY + th * 0.68f);
+                path.AddBezier(topPt, ctrlR1, ctrlR2, rightTip);
 
-                Color cTop = Color.FromArgb(255, 46, 138, 70);
-                Color cBot = Color.FromArgb(255, 20, 76, 38);
+                float lobeW = tw / lobes;
+                for (int i = lobes - 1; i >= 0; i--)
+                {
+                    float xRight = (cx - halfW) + (i + 1) * lobeW;
+                    float xLeft = (cx - halfW) + i * lobeW;
+
+                    float yOuterR = (i == lobes - 1) ? (botY - th * 0.08f) : (botY - 2.5f);
+                    float yOuterL = (i == 0) ? (botY - th * 0.08f) : (botY - 2.5f);
+                    float yDip = botY + th * 0.16f;
+
+                    path.AddBezier(
+                        new PointF(xRight, yOuterR),
+                        new PointF(xRight - lobeW * 0.15f, yDip),
+                        new PointF(xLeft + lobeW * 0.15f, yDip),
+                        new PointF(xLeft, yOuterL)
+                    );
+                }
+
+                PointF ctrlL2 = new PointF(cx - halfW * 0.96f, topY + th * 0.68f);
+                PointF ctrlL1 = new PointF(cx - halfW * 0.22f, topY + th * 0.22f);
+                path.AddBezier(leftTip, ctrlL2, ctrlL1, topPt);
+                path.CloseFigure();
+
+                Color cTop = Color.FromArgb(255, 96, 226, 118);
+                Color cMid = Color.FromArgb(255, 62, 198, 92);
+                Color cBot = Color.FromArgb(255, 38, 154, 68);
 
                 using (LinearGradientBrush grad = new LinearGradientBrush(
                     new PointF(cx, topY),
-                    new PointF(cx, botY),
+                    new PointF(cx, botY + 8f),
                     cTop, cBot))
                 {
-                    g.FillPath(grad, gp);
+                    ColorBlend cb = new ColorBlend(3);
+                    cb.Colors = new Color[] { cTop, cMid, cBot };
+                    cb.Positions = new float[] { 0f, 0.45f, 1f };
+                    grad.InterpolationColors = cb;
+                    g.FillPath(grad, path);
                 }
 
-                using (Pen rimPen = new Pen(Color.FromArgb(90, 15, 60, 30), 1f))
+                using (Pen rim = new Pen(Color.FromArgb(95, 24, 115, 50), 1f))
                 {
-                    g.DrawPath(rimPen, gp);
+                    g.DrawPath(rim, path);
+                }
+
+                if (tierIdx < 4)
+                {
+                    using (GraphicsPath shadowPath = new GraphicsPath())
+                    {
+                        shadowPath.AddEllipse(cx - halfW * 0.88f, botY - 2f, tw * 0.88f, 12f);
+                        using (SolidBrush sBrush = new SolidBrush(Color.FromArgb(70, 18, 80, 35)))
+                        {
+                            g.FillPath(sBrush, shadowPath);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void DrawTreeSnow(Graphics g, float cx, float cy, float w, float h)
+        {
+            DrawSnowPuff(g, cx - w * 0.46f, cy - 2f, 14f, 7f);
+            DrawSnowPuff(g, cx + w * 0.46f, cy - 2f, 14f, 7f);
+            DrawSnowPuff(g, cx - w * 0.18f, cy + 2f, 12f, 6f);
+            DrawSnowPuff(g, cx + w * 0.18f, cy + 2f, 12f, 6f);
+
+            float t3Y = cy - h * 0.18f;
+            DrawSnowPuff(g, cx - w * 0.38f, t3Y - 2f, 13f, 6.5f);
+            DrawSnowPuff(g, cx + w * 0.38f, t3Y - 2f, 13f, 6.5f);
+            DrawSnowPuff(g, cx, t3Y + 1.5f, 11f, 5.5f);
+
+            float t2Y = cy - h * 0.35f;
+            DrawSnowPuff(g, cx - w * 0.30f, t2Y - 2f, 12f, 6f);
+            DrawSnowPuff(g, cx + w * 0.30f, t2Y - 2f, 12f, 6f);
+
+            float t1Y = cy - h * 0.52f;
+            DrawSnowPuff(g, cx - w * 0.21f, t1Y - 1.5f, 10f, 5f);
+            DrawSnowPuff(g, cx + w * 0.21f, t1Y - 1.5f, 10f, 5f);
+        }
+
+        private void DrawSnowPuff(Graphics g, float px, float py, float pw, float ph)
+        {
+            float hw = pw * 0.5f;
+            float hh = ph * 0.5f;
+
+            using (SolidBrush shadow = new SolidBrush(Color.FromArgb(75, 20, 70, 32)))
+            {
+                g.FillEllipse(shadow, px - hw - 1f, py - hh + 1.5f, pw + 2f, ph);
+            }
+            using (SolidBrush blueBase = new SolidBrush(Color.FromArgb(255, 220, 238, 252)))
+            {
+                g.FillEllipse(blueBase, px - hw, py - hh, pw, ph);
+                g.FillEllipse(blueBase, px - hw * 0.4f, py - hh * 1.3f, pw * 0.55f, ph * 0.9f);
+                g.FillEllipse(blueBase, px + hw * 0.1f, py - hh * 1.2f, pw * 0.50f, ph * 0.85f);
+            }
+            using (SolidBrush whiteTop = new SolidBrush(Color.FromArgb(255, 255, 255, 255)))
+            {
+                g.FillEllipse(whiteTop, px - hw + 0.8f, py - hh - 1f, pw - 1.6f, ph * 0.85f);
+                g.FillEllipse(whiteTop, px - hw * 0.35f, py - hh * 1.3f, pw * 0.50f, ph * 0.80f);
+                g.FillEllipse(whiteTop, px + hw * 0.15f, py - hh * 1.2f, pw * 0.45f, ph * 0.75f);
+            }
+        }
+
+        private void DrawBaubles(Graphics g, float cx, float cy, float w, float h)
+        {
+            for (int i = 0; i < _baubles.Length; i++)
+            {
+                BaubleInfo b = _baubles[i];
+                float bx = cx + b.XRel * w;
+                float by = cy + b.YRel * h;
+                float br = b.Radius;
+                Color c = b.Color;
+
+                // Gold hanger cap
+                using (SolidBrush cap = new SolidBrush(Color.FromArgb(255, 252, 212, 85)))
+                {
+                    g.FillRectangle(cap, bx - br * 0.30f, by - br - 3f, br * 0.60f, 3.2f);
+                }
+                using (Pen capWire = new Pen(Color.FromArgb(210, 165, 125, 25), 1f))
+                {
+                    g.DrawArc(capWire, bx - br * 0.22f, by - br - 4.5f, br * 0.44f, 3.2f, 180, 180);
+                }
+
+                // Glossy spherical body
+                using (GraphicsPath bp = new GraphicsPath())
+                {
+                    bp.AddEllipse(bx - br, by - br, br * 2f, br * 2f);
+                    Color darkC = Color.FromArgb(
+                        (int)(c.R * 0.38f),
+                        (int)(c.G * 0.38f),
+                        (int)(c.B * 0.38f));
+
+                    using (PathGradientBrush pgb = new PathGradientBrush(bp))
+                    {
+                        pgb.CenterPoint = new PointF(bx - br * 0.35f, by - br * 0.35f);
+                        pgb.CenterColor = Color.FromArgb(255,
+                            Math.Min(255, (int)(c.R * 1.55f)),
+                            Math.Min(255, (int)(c.G * 1.55f)),
+                            Math.Min(255, (int)(c.B * 1.55f)));
+                        pgb.SurroundColors = new Color[] { darkC };
+                        g.FillPath(pgb, bp);
+                    }
+                }
+
+                // Glossy highlights
+                using (SolidBrush glint = new SolidBrush(Color.FromArgb(245, 255, 255, 255)))
+                {
+                    g.FillEllipse(glint, bx - br * 0.58f, by - br * 0.58f, br * 0.62f, br * 0.44f);
+                }
+                using (SolidBrush bounce = new SolidBrush(Color.FromArgb(50, 255, 255, 255)))
+                {
+                    g.FillEllipse(bounce, bx + br * 0.20f, by + br * 0.20f, br * 0.45f, br * 0.45f);
+                }
+            }
+        }
+
+        private void DrawFairyLights(Graphics g, float cx, float cy, float w, float h, float animTick)
+        {
+            for (int i = 0; i < _fairyLights.Length; i++)
+            {
+                LightInfo l = _fairyLights[i];
+                float lx = cx + l.XRel * w;
+                float ly = cy + l.YRel * h;
+
+                float pulse = (float)(0.75 + 0.25 * Math.Sin(animTick * 3.2f + l.Phase));
+                int alpha = (int)(255 * pulse);
+
+                // Radiant halo
+                using (SolidBrush halo = new SolidBrush(Color.FromArgb((int)(80 * pulse), l.Color)))
+                {
+                    g.FillEllipse(halo, lx - 7f, ly - 7f, 14f, 14f);
+                }
+                // Inner warm ring
+                using (SolidBrush inner = new SolidBrush(Color.FromArgb((int)(150 * pulse), 255, 245, 160)))
+                {
+                    g.FillEllipse(inner, lx - 3.2f, ly - 3.2f, 6.4f, 6.4f);
+                }
+                // Bright white-gold core
+                using (SolidBrush core = new SolidBrush(Color.FromArgb(alpha, 255, 255, 245)))
+                {
+                    g.FillEllipse(core, lx - 1.6f, ly - 1.6f, 3.2f, 3.2f);
+                }
+            }
+        }
+
+        private void DrawPeakStar(Graphics g, float cx, float cy, float r, float animTick)
+        {
+            float pulse = (float)(0.80 + 0.20 * Math.Sin(animTick * 2.8f));
+
+            using (GraphicsPath gp = new GraphicsPath())
+            {
+                gp.AddEllipse(cx - r * 2.2f, cy - r * 2.2f, r * 4.4f, r * 4.4f);
+                using (PathGradientBrush pgb = new PathGradientBrush(gp))
+                {
+                    pgb.CenterColor = Color.FromArgb((int)(135 * pulse), 255, 220, 30);
+                    pgb.SurroundColors = new Color[] { Color.FromArgb(0, 255, 200, 0) };
+                    g.FillPath(pgb, gp);
                 }
             }
 
-            // Fluffy white snow caps on branch shoulders
-            using (SolidBrush snowBrush = new SolidBrush(Color.FromArgb(235, 255, 255, 255)))
-            {
-                g.FillEllipse(snowBrush, cx - halfW * 0.72f, topY + tierH * 0.68f - 3f, halfW * 0.52f, 6.5f);
-                g.FillEllipse(snowBrush, cx + halfW * 0.20f, topY + tierH * 0.68f - 3f, halfW * 0.52f, 6.5f);
-            }
+            ChristmasManager.DrawStarPolygon(g, cx, cy, r, r * 0.46f,
+                Color.FromArgb(255, 255, 242, 85),
+                Color.FromArgb(255, 248, 175, 18));
         }
     }
 

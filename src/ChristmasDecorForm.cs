@@ -212,7 +212,7 @@ namespace BoWeather
             }
 
             // 3. Card 0: Pohon Natal
-            DrawCatalogCard(g, _cardTreeRect, "tree", "Pohon Natal 3D", "Pohon cemara berhias lampu & ornamen", _hoveredCard == 0, cardBg, cardHover, textMain, textSub);
+            DrawCatalogCard(g, _cardTreeRect, "tree", "Pohon Natal 3D", "Pohon cemara 3D berhias salju, ornamen & lampu", _hoveredCard == 0, cardBg, cardHover, textMain, textSub);
             string treeBtnText = _mgr.Trees.Count > 0 ? "+ Tambah (" + _mgr.Trees.Count + ")" : "+ Pasang";
             DrawPillButton(g, _btnTreeAddRect, treeBtnText, _hoveredAction == 0, accentGreen);
 
