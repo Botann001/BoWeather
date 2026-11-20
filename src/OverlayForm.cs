@@ -486,15 +486,25 @@ namespace BoWeather
                             return (IntPtr)1; // Consume event! No Desktop Selection Box!
                         }
 
-                        // 1.5. Did the user click on a Christmas Tree or Gift Box?
+                        // 1.5. Did the user click on a Christmas accessory (Delete button, Light handle, Tree, or Gift)?
                         if (_particleSystem.Christmas != null)
                         {
-                            object xHit = _particleSystem.Christmas.HitTest(mouseX, mouseY);
+                            int hitPart;
+                            object xHit = _particleSystem.Christmas.HitTest(mouseX, mouseY, out hitPart);
                             if (xHit != null)
                             {
-                                _isChristmasInteracting = true;
-                                _particleSystem.Christmas.StartDrag(xHit, mouseX, mouseY);
-                                return (IntPtr)1; // Consume event!
+                                if (hitPart == ChristmasManager.PART_DELETE)
+                                {
+                                    _particleSystem.Christmas.RemoveItem(xHit);
+                                    _particleSystem.SpawnSnowPuff(mouseX, mouseY, 18);
+                                    return (IntPtr)1; // Consume event!
+                                }
+                                else
+                                {
+                                    _isChristmasInteracting = true;
+                                    _particleSystem.Christmas.StartDrag(xHit, hitPart, mouseX, mouseY);
+                                    return (IntPtr)1; // Consume event!
+                                }
                             }
                         }
 
@@ -540,10 +550,14 @@ namespace BoWeather
                     }
                     else if (msg == WM_MOUSEMOVE)
                     {
-                        if (_isChristmasInteracting && _particleSystem.Christmas != null)
+                        if (_particleSystem.Christmas != null)
                         {
-                            int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
-                            _particleSystem.Christmas.OnMouseMove(mouseX, mouseY, _windowManager, Bounds.Width, floorY, _particleSystem.SpawnSnowPuff);
+                            _particleSystem.Christmas.UpdateHover(mouseX, mouseY);
+                            if (_isChristmasInteracting)
+                            {
+                                int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
+                                _particleSystem.Christmas.OnMouseMove(mouseX, mouseY, _windowManager, Bounds.Width, floorY, _particleSystem.SpawnSnowPuff);
+                            }
                         }
 
                         if (_isHookInteracting)
@@ -581,21 +595,16 @@ namespace BoWeather
                     }
                     else if (msg == WM_RBUTTONDOWN)
                     {
-                        // Right-click on Christmas Gift or Tree
+                        // Right-click on Christmas Accessory to immediately delete it!
                         if (_particleSystem.Christmas != null)
                         {
-                            object xHit = _particleSystem.Christmas.HitTest(mouseX, mouseY);
-                            if (xHit is ChristmasGift)
+                            int hitPart;
+                            object xHit = _particleSystem.Christmas.HitTest(mouseX, mouseY, out hitPart);
+                            if (xHit != null)
                             {
                                 _isRightClickInteracting = true;
-                                _particleSystem.Christmas.RemoveGift((ChristmasGift)xHit);
-                                _particleSystem.SpawnSnowPuff(mouseX, mouseY, 18);
-                                return (IntPtr)1;
-                            }
-                            else if ("tree".Equals(xHit))
-                            {
-                                _isRightClickInteracting = true;
-                                _particleSystem.SpawnSnowPuff(mouseX, mouseY, 25);
+                                _particleSystem.Christmas.RemoveItem(xHit);
+                                _particleSystem.SpawnSnowPuff(mouseX, mouseY, 20);
                                 return (IntPtr)1;
                             }
                         }

@@ -11,17 +11,47 @@ namespace BoWeather
         private readonly OverlayForm _overlay;
         private readonly bool _isDarkMode;
 
+        // Colors for gifts
+        private readonly Color[] _giftBoxColors = new Color[]
+        {
+            Color.FromArgb(220, 38, 38),   // Red
+            Color.FromArgb(22, 163, 74),   // Green
+            Color.FromArgb(37, 99, 235),   // Blue
+            Color.FromArgb(217, 119, 6)    // Amber Gold
+        };
+
+        private readonly Color[] _giftRibbonColors = new Color[]
+        {
+            Color.FromArgb(255, 215, 0),   // Gold
+            Color.FromArgb(254, 240, 138), // Pale Gold
+            Color.FromArgb(255, 255, 255), // White
+            Color.FromArgb(239, 68, 68)    // Red
+        };
+
+        private int _selectedGiftColor = 0;
+
         // Layout Rectangles
         private Rectangle _headerRect;
         private Rectangle _closeBtnRect;
-        private Rectangle[] _toggleRowRects = new Rectangle[5];
-        private Rectangle _btnAddGiftRect;
-        private Rectangle _btnResetRect;
+        private Rectangle _cardTreeRect;
+        private Rectangle _cardGiftRect;
+        private Rectangle _cardLightsRect;
+        private Rectangle _cardHatRect;
+
+        private Rectangle _btnTreeAddRect;
+        private Rectangle _btnGiftAddRect;
+        private Rectangle _btnLightsAddRect;
+        private Rectangle _toggleHatRect;
+        private Rectangle[] _giftSwatchRects = new Rectangle[4];
+
+        private Rectangle _btnClearAllRect;
         private Rectangle _btnCloseBottomRect;
+        private Rectangle _hintRect;
 
         // Hover & Interaction States
-        private int _hoveredRow = -1;
-        private int _hoveredBtn = -1;
+        private int _hoveredCard = -1;
+        private int _hoveredAction = -1; // 0=treeAdd, 1=giftAdd, 2=lightsAdd, 3=toggleHat, 4=clearAll, 5=closeBottom
+        private int _hoveredSwatch = -1;
         private bool _hoverClose = false;
         private bool _isDraggingForm = false;
         private Point _dragStartCursor;
@@ -33,6 +63,7 @@ namespace BoWeather
         private readonly Font _labelFont;
         private readonly Font _descFont;
         private readonly Font _btnFont;
+        private readonly Font _hintFont;
 
         public ChristmasDecorForm(ChristmasManager mgr, OverlayForm overlay, bool isDarkMode)
         {
@@ -46,9 +77,8 @@ namespace BoWeather
             StartPosition = FormStartPosition.Manual;
             DoubleBuffered = true;
 
-            Size = new Size(364, 530);
+            Size = new Size(380, 520);
 
-            // Center relative to primary screen or near top center
             Rectangle screen = Screen.PrimaryScreen.WorkingArea;
             Location = new Point(screen.Left + (screen.Width - Width) / 2, screen.Top + (screen.Height - Height) / 2);
 
@@ -56,7 +86,8 @@ namespace BoWeather
             _subFont = new Font("Segoe UI", 11.5f, FontStyle.Regular, GraphicsUnit.Pixel);
             _labelFont = new Font("Segoe UI", 13.5f, FontStyle.Bold, GraphicsUnit.Pixel);
             _descFont = new Font("Segoe UI", 11f, FontStyle.Regular, GraphicsUnit.Pixel);
-            _btnFont = new Font("Segoe UI", 12.5f, FontStyle.Bold, GraphicsUnit.Pixel);
+            _btnFont = new Font("Segoe UI", 12f, FontStyle.Bold, GraphicsUnit.Pixel);
+            _hintFont = new Font("Segoe UI", 10.5f, FontStyle.Regular, GraphicsUnit.Pixel);
 
             CalculateLayout();
         }
@@ -67,27 +98,51 @@ namespace BoWeather
             int pad = 16;
             int top = 16;
 
-            _headerRect = new Rectangle(pad, top, w - pad * 2, 48);
-            _closeBtnRect = new Rectangle(w - pad - 32, top + 6, 32, 32);
+            _headerRect = new Rectangle(pad, top, w - pad * 2, 46);
+            _closeBtnRect = new Rectangle(w - pad - 32, top + 4, 32, 32);
 
-            int startY = top + 56;
-            int rowH = 54;
-            int rowGap = 6;
+            int startY = top + 52;
+            int cardW = w - pad * 2;
+            int btnW = 100;
+            int btnH = 36;
 
-            for (int i = 0; i < 5; i++)
+            // Card 1: Tree (H=68)
+            _cardTreeRect = new Rectangle(pad, startY, cardW, 68);
+            _btnTreeAddRect = new Rectangle(_cardTreeRect.Right - btnW - 10, _cardTreeRect.Y + (_cardTreeRect.Height - btnH) / 2, btnW, btnH);
+
+            // Card 2: Gift (H=88) with color swatches
+            _cardGiftRect = new Rectangle(pad, _cardTreeRect.Bottom + 8, cardW, 88);
+            _btnGiftAddRect = new Rectangle(_cardGiftRect.Right - btnW - 10, _cardGiftRect.Y + 12, btnW, btnH);
+            int swatchSize = 20;
+            int swatchGap = 8;
+            int swatchStartX = _cardGiftRect.X + 54;
+            int swatchY = _cardGiftRect.Y + 54;
+            for (int i = 0; i < 4; i++)
             {
-                _toggleRowRects[i] = new Rectangle(pad, startY + i * (rowH + rowGap), w - pad * 2, rowH);
+                _giftSwatchRects[i] = new Rectangle(swatchStartX + i * (swatchSize + swatchGap), swatchY, swatchSize, swatchSize);
             }
 
-            int actionsTop = startY + 5 * (rowH + rowGap) + 12;
-            int btnGap = 8;
-            int contentW = w - pad * 2;
-            int halfW = (contentW - btnGap) / 2;
-            int btnH = 40;
+            // Card 3: Lights (H=68)
+            _cardLightsRect = new Rectangle(pad, _cardGiftRect.Bottom + 8, cardW, 68);
+            _btnLightsAddRect = new Rectangle(_cardLightsRect.Right - btnW - 10, _cardLightsRect.Y + (_cardLightsRect.Height - btnH) / 2, btnW, btnH);
 
-            _btnAddGiftRect = new Rectangle(pad, actionsTop, halfW, btnH);
-            _btnResetRect = new Rectangle(pad + halfW + btnGap, actionsTop, halfW, btnH);
-            _btnCloseBottomRect = new Rectangle(pad, actionsTop + btnH + btnGap, contentW, btnH);
+            // Card 4: Santa Hat (H=64)
+            _cardHatRect = new Rectangle(pad, _cardLightsRect.Bottom + 8, cardW, 64);
+            int switchW = 46;
+            int switchH = 26;
+            _toggleHatRect = new Rectangle(_cardHatRect.Right - switchW - 14, _cardHatRect.Y + (_cardHatRect.Height - switchH) / 2, switchW, switchH);
+
+            // Hint box
+            _hintRect = new Rectangle(pad, _cardHatRect.Bottom + 10, cardW, 34);
+
+            // Bottom action buttons
+            int bBtnH = 40;
+            int bGap = 10;
+            int halfW = (cardW - bGap) / 2;
+            int bottomY = _hintRect.Bottom + 10;
+
+            _btnClearAllRect = new Rectangle(pad, bottomY, halfW, bBtnH);
+            _btnCloseBottomRect = new Rectangle(pad + halfW + bGap, bottomY, halfW, bBtnH);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -99,7 +154,6 @@ namespace BoWeather
             int w = ClientSize.Width;
             int h = ClientSize.Height;
 
-            // Palette
             Color bg = _isDarkMode ? Color.FromArgb(248, 22, 26, 33) : Color.FromArgb(250, 255, 255, 255);
             Color border = _isDarkMode ? Color.FromArgb(70, 255, 255, 255) : Color.FromArgb(40, 0, 0, 0);
             Color textMain = _isDarkMode ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 22, 26, 33);
@@ -107,6 +161,7 @@ namespace BoWeather
             Color cardBg = _isDarkMode ? Color.FromArgb(140, 32, 37, 46) : Color.FromArgb(240, 245, 248, 252);
             Color cardHover = _isDarkMode ? Color.FromArgb(190, 42, 48, 60) : Color.FromArgb(255, 238, 242, 248);
             Color accentColor = Color.FromArgb(255, 22, 119, 255);
+            Color accentGreen = Color.FromArgb(255, 22, 163, 74);
             Color accentFestive = Color.FromArgb(255, 220, 38, 38);
 
             // 1. Form Rounded Background & Border
@@ -126,8 +181,8 @@ namespace BoWeather
             using (SolidBrush titleB = new SolidBrush(textMain))
             using (SolidBrush subB = new SolidBrush(textSub))
             {
-                g.DrawString("🎄 Dekorasi & Aksesoris Natal", _titleFont, titleB, 18, 18);
-                g.DrawString("Pernak-pernik musim dingin untuk desktop Anda", _subFont, subB, 20, 42);
+                g.DrawString("🎄 Pilihan Aksesoris Natal", _titleFont, titleB, 18, 18);
+                g.DrawString("Pasang dan atur dekorasi sesukamu di desktop", _subFont, subB, 20, 42);
             }
 
             // Top Close Button (✕)
@@ -143,60 +198,77 @@ namespace BoWeather
                 VectorIcons.DrawIcon(g, "close", _closeBtnRect.X + 16, _closeBtnRect.Y + 16, 12f, textSub);
             }
 
-            // 3. Five Toggle Cards
-            string[] titles = new string[]
-            {
-                "Pohon Natal (Christmas Tree)",
-                "Kado Natal (Gift Boxes)",
-                "Lampu Natal Gantung",
-                "Lampu Bintang (Star Lights)",
-                "Topi Santa untuk Snowman"
-            };
+            // 3. Card 0: Pohon Natal
+            DrawCatalogCard(g, _cardTreeRect, "tree", "Pohon Natal 3D", "Pohon cemara berhias lampu & bintang", _hoveredCard == 0, cardBg, cardHover, textMain, textSub);
+            string treeBtnText = _mgr.Trees.Count > 0 ? "+ Tambah (" + _mgr.Trees.Count + ")" : "+ Pasang Pohon";
+            DrawPillButton(g, _btnTreeAddRect, treeBtnText, _hoveredAction == 0, accentGreen);
 
-            string[] subs = new string[]
-            {
-                "Pohon cemara 3D berhias bintang & lampu",
-                "Kotak kado 3D interaktif di atas salju",
-                "Untaian lampu warna-warni kelap-kelip",
-                "Bintang emas bercahaya di untaian lampu",
-                "Pakaikan topi Sinterklas ke boneka salju"
-            };
+            // 4. Card 1: Kado Natal
+            DrawCatalogCard(g, _cardGiftRect, "gift", "Kado Natal 3D", "Kotak kado bisa ditumpuk & dilempar", _hoveredCard == 1, cardBg, cardHover, textMain, textSub);
+            string giftBtnText = _mgr.Gifts.Count > 0 ? "+ Tambah (" + _mgr.Gifts.Count + ")" : "+ Tambah Kado";
+            DrawPillButton(g, _btnGiftAddRect, giftBtnText, _hoveredAction == 1, accentFestive);
 
-            string[] iconNames = new string[] { "tree", "gift", "lights", "star", "santahat" };
-            bool[] states = new bool[]
+            // Color Swatches on Gift Card
+            using (SolidBrush stx = new SolidBrush(textSub))
             {
-                _mgr.ShowTree,
-                _mgr.ShowGifts,
-                _mgr.ShowLights,
-                _mgr.ShowStarLights,
-                _mgr.ShowSantaHat
-            };
-
-            for (int i = 0; i < 5; i++)
+                g.DrawString("Warna:", _hintFont, stx, _cardGiftRect.X + 12, _cardGiftRect.Y + 56);
+            }
+            for (int i = 0; i < 4; i++)
             {
-                Rectangle r = _toggleRowRects[i];
-                bool isHover = (_hoveredRow == i);
-                bool isOn = states[i];
+                Rectangle sr = _giftSwatchRects[i];
+                bool isSelected = (_selectedGiftColor == i);
+                bool isHover = (_hoveredSwatch == i);
 
-                DrawToggleCard(g, r, iconNames[i], titles[i], subs[i], isOn, isHover, cardBg, cardHover, textMain, textSub, accentFestive);
+                using (SolidBrush sb = new SolidBrush(_giftBoxColors[i]))
+                {
+                    g.FillEllipse(sb, sr);
+                }
+
+                if (isSelected || isHover)
+                {
+                    using (Pen sp = new Pen(isSelected ? Color.White : Color.FromArgb(180, 255, 255, 255), isSelected ? 2.2f : 1.5f))
+                    {
+                        g.DrawEllipse(sp, sr.X - 1, sr.Y - 1, sr.Width + 2, sr.Height + 2);
+                    }
+                }
             }
 
-            // 4. Action Buttons
-            // Button 0: + Tambah Kado
-            DrawActionButton(g, _btnAddGiftRect, "gift", "+ Tambah Kado",
-                _hoveredBtn == 0 ? cardHover : cardBg, textMain, _isDarkMode ? Color.FromArgb(60, 255, 255, 255) : Color.FromArgb(30, 0, 0, 0));
+            // 5. Card 2: Lampu Natal Gantung
+            DrawCatalogCard(g, _cardLightsRect, "lights", "Lampu Natal Gantung", "Tarik bulatan kiri/kanan untuk atur ukuran!", _hoveredCard == 2, cardBg, cardHover, textMain, textSub);
+            string lightsBtnText = _mgr.Lights.Count > 0 ? "+ Tambah (" + _mgr.Lights.Count + ")" : "+ Pasang Lampu";
+            DrawPillButton(g, _btnLightsAddRect, lightsBtnText, _hoveredAction == 2, Color.FromArgb(217, 119, 6));
 
-            // Button 1: 🔄 Reset Posisi
-            DrawActionButton(g, _btnResetRect, "refresh", "Reset Posisi",
-                _hoveredBtn == 1 ? cardHover : cardBg, textMain, _isDarkMode ? Color.FromArgb(60, 255, 255, 255) : Color.FromArgb(30, 0, 0, 0));
+            // 6. Card 3: Topi Santa untuk Snowman
+            DrawCatalogCard(g, _cardHatRect, "santahat", "Topi Santa Snowman", "Pakaikan topi Sinterklas ke boneka salju", _hoveredCard == 3, cardBg, cardHover, textMain, textSub);
+            DrawToggleSwitch(g, _toggleHatRect, _mgr.ShowSantaHat, _hoveredAction == 3, accentFestive);
 
-            // Button 2: Tutup (Accent)
-            DrawActionButton(g, _btnCloseBottomRect, "close", "Selesai",
-                _hoveredBtn == 2 ? Color.FromArgb(20, 130, 235) : accentColor, Color.White, Color.Transparent);
+            // 7. Hint / Guide Notice
+            using (GraphicsPath hp = VectorIcons.CreateRoundedRect(new RectangleF(_hintRect.X, _hintRect.Y, _hintRect.Width, _hintRect.Height), 8f))
+            {
+                using (SolidBrush hb = new SolidBrush(_isDarkMode ? Color.FromArgb(30, 255, 255, 255) : Color.FromArgb(18, 0, 0, 0)))
+                {
+                    g.FillPath(hb, hp);
+                }
+            }
+            using (SolidBrush hintBrush = new SolidBrush(textSub))
+            {
+                StringFormat sf = new StringFormat();
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                g.DrawString("💡 Tarik bulatan lampu untuk atur panjangnya. Klik (X) pada item untuk menghapus.", _hintFont, hintBrush, _hintRect, sf);
+            }
+
+            // 8. Bottom Buttons
+            // Clear All Button
+            DrawOutlineButton(g, _btnClearAllRect, "🗑️ Hapus Semua", _hoveredAction == 4,
+                Color.FromArgb(220, 38, 38), _isDarkMode ? Color.FromArgb(40, 220, 38, 38) : Color.FromArgb(20, 220, 38, 38));
+
+            // Done Button
+            DrawPillButton(g, _btnCloseBottomRect, "Selesai", _hoveredAction == 5, accentColor);
         }
 
-        private void DrawToggleCard(Graphics g, Rectangle r, string iconName, string title, string sub, bool isOn, bool isHover,
-            Color cardBg, Color cardHover, Color textMain, Color textSub, Color toggleOnCol)
+        private void DrawCatalogCard(Graphics g, Rectangle r, string iconName, string title, string sub, bool isHover,
+            Color cardBg, Color cardHover, Color textMain, Color textSub)
         {
             using (GraphicsPath cp = VectorIcons.CreateRoundedRect(new RectangleF(r.X, r.Y, r.Width, r.Height), 14f))
             {
@@ -204,7 +276,6 @@ namespace BoWeather
                 {
                     g.FillPath(bgB, cp);
                 }
-
                 using (Pen bp = new Pen(_isDarkMode ? Color.FromArgb(35, 255, 255, 255) : Color.FromArgb(25, 0, 0, 0), 1f))
                 {
                     g.DrawPath(bp, cp);
@@ -212,18 +283,17 @@ namespace BoWeather
             }
 
             // Icon square at left
-            int iconBoxSize = 36;
-            int iconBoxX = r.X + 8;
-            int iconBoxY = r.Y + (r.Height - iconBoxSize) / 2;
+            int iconBoxSize = 38;
+            int iconBoxX = r.X + 10;
+            int iconBoxY = r.Y + 12;
             using (GraphicsPath ip = VectorIcons.CreateRoundedRect(new RectangleF(iconBoxX, iconBoxY, iconBoxSize, iconBoxSize), 10f))
             {
-                Color ibg = isOn ? Color.FromArgb(40, toggleOnCol) : (_isDarkMode ? Color.FromArgb(40, 255, 255, 255) : Color.FromArgb(20, 0, 0, 0));
+                Color ibg = _isDarkMode ? Color.FromArgb(40, 255, 255, 255) : Color.FromArgb(20, 0, 0, 0);
                 using (SolidBrush ib = new SolidBrush(ibg))
                 {
                     g.FillPath(ib, ip);
                 }
-                Color ic = isOn ? toggleOnCol : textSub;
-                VectorIcons.DrawIcon(g, iconName, iconBoxX + iconBoxSize * 0.5f, iconBoxY + iconBoxSize * 0.5f, 18f, ic, ic);
+                VectorIcons.DrawIcon(g, iconName, iconBoxX + iconBoxSize * 0.5f, iconBoxY + iconBoxSize * 0.5f, 20f, textMain);
             }
 
             // Labels
@@ -231,129 +301,181 @@ namespace BoWeather
             using (SolidBrush mb = new SolidBrush(textMain))
             using (SolidBrush sb = new SolidBrush(textSub))
             {
-                g.DrawString(title, _labelFont, mb, textX, r.Y + 9);
-                g.DrawString(sub, _descFont, sb, textX, r.Y + 28);
-            }
-
-            // Toggle Pill Switch at right
-            int pillW = 44;
-            int pillH = 24;
-            int pillX = r.Right - pillW - 12;
-            int pillY = r.Y + (r.Height - pillH) / 2;
-            Rectangle pillRect = new Rectangle(pillX, pillY, pillW, pillH);
-
-            Color switchTrack = isOn ? toggleOnCol : (_isDarkMode ? Color.FromArgb(255, 65, 75, 90) : Color.FromArgb(255, 215, 222, 230));
-            using (GraphicsPath sp = VectorIcons.CreateRoundedRect(new RectangleF(pillRect.X, pillRect.Y, pillRect.Width, pillRect.Height), pillH * 0.5f))
-            {
-                using (SolidBrush tb = new SolidBrush(switchTrack))
-                {
-                    g.FillPath(tb, sp);
-                }
-
-                // Thumb knob circle
-                float knobRadius = (pillH - 4) * 0.5f;
-                float knobX = isOn ? (pillRect.Right - knobRadius - 2f) : (pillRect.Left + knobRadius + 2f);
-                float knobY = pillRect.Top + 2f + knobRadius;
-
-                using (SolidBrush kb = new SolidBrush(Color.White))
-                {
-                    g.FillEllipse(kb, knobX - knobRadius, knobY - knobRadius, knobRadius * 2f, knobRadius * 2f);
-                }
+                g.DrawString(title, _labelFont, mb, textX, r.Y + 11);
+                g.DrawString(sub, _descFont, sb, textX, r.Y + 31);
             }
         }
 
-        private void DrawActionButton(Graphics g, Rectangle r, string iconName, string text, Color bgCol, Color fgCol, Color borderCol)
+        private void DrawPillButton(Graphics g, Rectangle r, string text, bool isHover, Color baseColor)
         {
-            using (GraphicsPath bp = VectorIcons.CreateRoundedRect(new RectangleF(r.X, r.Y, r.Width, r.Height), 12f))
+            Color bg = isHover ? Color.FromArgb(Math.Min(255, (int)(baseColor.R * 1.15f)),
+                                                Math.Min(255, (int)(baseColor.G * 1.15f)),
+                                                Math.Min(255, (int)(baseColor.B * 1.15f))) : baseColor;
+
+            using (GraphicsPath bp = VectorIcons.CreateRoundedRect(new RectangleF(r.X, r.Y, r.Width, r.Height), r.Height * 0.5f))
             {
-                using (SolidBrush bgB = new SolidBrush(bgCol))
+                using (SolidBrush bb = new SolidBrush(bg))
                 {
-                    g.FillPath(bgB, bp);
-                }
-                if (borderCol != Color.Transparent)
-                {
-                    using (Pen bpPen = new Pen(borderCol, 1f))
-                    {
-                        g.DrawPath(bpPen, bp);
-                    }
+                    g.FillPath(bb, bp);
                 }
             }
 
-            using (SolidBrush fb = new SolidBrush(fgCol))
+            using (SolidBrush tb = new SolidBrush(Color.White))
             {
-                StringFormat sf = new StringFormat
+                StringFormat sf = new StringFormat();
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                g.DrawString(text, _btnFont, tb, r, sf);
+            }
+        }
+
+        private void DrawOutlineButton(Graphics g, Rectangle r, string text, bool isHover, Color accentColor, Color hoverBg)
+        {
+            using (GraphicsPath bp = VectorIcons.CreateRoundedRect(new RectangleF(r.X, r.Y, r.Width, r.Height), r.Height * 0.5f))
+            {
+                if (isHover)
                 {
-                    Alignment = StringAlignment.Center,
-                    LineAlignment = StringAlignment.Center
-                };
-                g.DrawString(text, _btnFont, fb, new RectangleF(r.X, r.Y, r.Width, r.Height), sf);
+                    using (SolidBrush bb = new SolidBrush(hoverBg))
+                    {
+                        g.FillPath(bb, bp);
+                    }
+                }
+                using (Pen pen = new Pen(accentColor, 1.2f))
+                {
+                    g.DrawPath(pen, bp);
+                }
+            }
+
+            using (SolidBrush tb = new SolidBrush(accentColor))
+            {
+                StringFormat sf = new StringFormat();
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                g.DrawString(text, _btnFont, tb, r, sf);
+            }
+        }
+
+        private void DrawToggleSwitch(Graphics g, Rectangle r, bool isOn, bool isHover, Color onColor)
+        {
+            Color track = isOn ? onColor : (_isDarkMode ? Color.FromArgb(255, 65, 75, 90) : Color.FromArgb(255, 215, 222, 230));
+            using (GraphicsPath sp = VectorIcons.CreateRoundedRect(new RectangleF(r.X, r.Y, r.Width, r.Height), r.Height * 0.5f))
+            {
+                using (SolidBrush tb = new SolidBrush(track))
+                {
+                    g.FillPath(tb, sp);
+                }
+            }
+
+            int thumbR = r.Height - 6;
+            int thumbX = isOn ? (r.Right - thumbR - 3) : (r.X + 3);
+            int thumbY = r.Y + 3;
+
+            using (SolidBrush thumbB = new SolidBrush(Color.White))
+            {
+                g.FillEllipse(thumbB, thumbX, thumbY, thumbR, thumbR);
             }
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
-            if (e.Button != MouseButtons.Left) return;
-
-            // Close button top-right
-            if (_closeBtnRect.Contains(e.Location))
+            if (e.Button == MouseButtons.Left)
             {
-                Close();
-                return;
-            }
-
-            // Toggles
-            for (int i = 0; i < 5; i++)
-            {
-                if (_toggleRowRects[i].Contains(e.Location))
+                // Top close button
+                if (_closeBtnRect.Contains(e.Location))
                 {
-                    switch (i)
+                    Close();
+                    return;
+                }
+
+                // Swatches
+                for (int i = 0; i < 4; i++)
+                {
+                    if (_giftSwatchRects[i].Contains(e.Location))
                     {
-                        case 0: _mgr.ShowTree = !_mgr.ShowTree; break;
-                        case 1: _mgr.ShowGifts = !_mgr.ShowGifts; break;
-                        case 2: _mgr.ShowLights = !_mgr.ShowLights; break;
-                        case 3: _mgr.ShowStarLights = !_mgr.ShowStarLights; break;
-                        case 4: _mgr.ShowSantaHat = !_mgr.ShowSantaHat; break;
+                        _selectedGiftColor = i;
+                        Invalidate();
+                        return;
                     }
+                }
+
+                // Action buttons
+                Rectangle screen = Screen.PrimaryScreen.WorkingArea;
+                int floorY = screen.Bottom;
+
+                // 1. Add Tree
+                if (_btnTreeAddRect.Contains(e.Location))
+                {
+                    float spawnX = screen.Left + screen.Width * 0.72f;
+                    float spawnY = floorY - 6f;
+                    // Slightly stagger if trees already exist
+                    if (_mgr.Trees.Count > 0)
+                    {
+                        spawnX = screen.Left + screen.Width * 0.50f + (_mgr.Trees.Count * 60f) % (screen.Width * 0.4f);
+                    }
+                    _mgr.AddTree(spawnX, spawnY);
+                    _overlay.Particles.SpawnSnowPuff(spawnX, spawnY, 15);
+                    Invalidate();
+                    return;
+                }
+
+                // 2. Add Gift
+                if (_btnGiftAddRect.Contains(e.Location))
+                {
+                    float spawnX = screen.Left + screen.Width * 0.60f + (_mgr.Gifts.Count * 45f) % (screen.Width * 0.3f);
+                    float spawnY = floorY - 6f;
+                    Color boxCol = _giftBoxColors[_selectedGiftColor];
+                    Color ribCol = _giftRibbonColors[_selectedGiftColor];
+                    _mgr.AddGift(spawnX, spawnY, boxCol, ribCol);
+                    _overlay.Particles.SpawnSnowPuff(spawnX, spawnY, 10);
+                    Invalidate();
+                    return;
+                }
+
+                // 3. Add String Lights
+                if (_btnLightsAddRect.Contains(e.Location))
+                {
+                    float x1 = screen.Left + screen.Width * 0.28f;
+                    float y1 = screen.Top + screen.Height * 0.32f + (_mgr.Lights.Count * 70f) % (screen.Height * 0.3f);
+                    float x2 = screen.Left + screen.Width * 0.72f;
+                    float y2 = y1;
+                    _mgr.AddLights(x1, y1, x2, y2);
+                    _overlay.Particles.SpawnSnowPuff((x1 + x2) * 0.5f, y1, 15);
+                    Invalidate();
+                    return;
+                }
+
+                // 4. Toggle Santa Hat
+                if (_cardHatRect.Contains(e.Location))
+                {
+                    _mgr.ShowSantaHat = !_mgr.ShowSantaHat;
                     _mgr.SaveSettings();
                     Invalidate();
                     return;
                 }
-            }
 
-            // Button 0: + Tambah Kado
-            if (_btnAddGiftRect.Contains(e.Location))
-            {
-                int floorY = Screen.PrimaryScreen.Bounds.Height - 48;
-                _mgr.AddGift(Screen.PrimaryScreen.Bounds.Width * 0.5f, floorY - 6f, floorY);
-                _mgr.ShowGifts = true;
-                _mgr.SaveSettings();
-                Invalidate();
-                return;
-            }
+                // 5. Clear All
+                if (_btnClearAllRect.Contains(e.Location))
+                {
+                    _mgr.ClearAll();
+                    Invalidate();
+                    return;
+                }
 
-            // Button 1: Reset Posisi
-            if (_btnResetRect.Contains(e.Location))
-            {
-                int floorY = Screen.PrimaryScreen.Bounds.Height - 48;
-                _mgr.ResetPositions(Screen.PrimaryScreen.Bounds.Width, floorY);
-                Invalidate();
-                return;
-            }
+                // 6. Close Bottom
+                if (_btnCloseBottomRect.Contains(e.Location))
+                {
+                    Close();
+                    return;
+                }
 
-            // Button 2: Tutup
-            if (_btnCloseBottomRect.Contains(e.Location))
-            {
-                Close();
-                return;
-            }
-
-            // Header drag
-            if (_headerRect.Contains(e.Location))
-            {
-                _isDraggingForm = true;
-                _dragStartCursor = Cursor.Position;
-                _dragStartFormPos = Location;
+                // Drag window from header
+                if (_headerRect.Contains(e.Location))
+                {
+                    _isDraggingForm = true;
+                    _dragStartCursor = Cursor.Position;
+                    _dragStartFormPos = Location;
+                }
             }
         }
 
@@ -361,43 +483,62 @@ namespace BoWeather
         {
             base.OnMouseMove(e);
 
-            if (_isDraggingForm && e.Button == MouseButtons.Left)
+            if (_isDraggingForm)
             {
                 Point cur = Cursor.Position;
-                Location = new Point(_dragStartFormPos.X + (cur.X - _dragStartCursor.X), _dragStartFormPos.Y + (cur.Y - _dragStartCursor.Y));
+                Location = new Point(
+                    _dragStartFormPos.X + (cur.X - _dragStartCursor.X),
+                    _dragStartFormPos.Y + (cur.Y - _dragStartCursor.Y)
+                );
                 return;
             }
 
-            int oldRow = _hoveredRow;
-            int oldBtn = _hoveredBtn;
-            bool oldClose = _hoverClose;
+            bool needRepaint = false;
 
-            _hoverClose = _closeBtnRect.Contains(e.Location);
-            _hoveredRow = -1;
-            for (int i = 0; i < 5; i++)
+            // Hover close
+            bool hc = _closeBtnRect.Contains(e.Location);
+            if (hc != _hoverClose) { _hoverClose = hc; needRepaint = true; }
+
+            // Hover card
+            int hcIdx = -1;
+            if (_cardTreeRect.Contains(e.Location)) hcIdx = 0;
+            else if (_cardGiftRect.Contains(e.Location)) hcIdx = 1;
+            else if (_cardLightsRect.Contains(e.Location)) hcIdx = 2;
+            else if (_cardHatRect.Contains(e.Location)) hcIdx = 3;
+
+            if (hcIdx != _hoveredCard) { _hoveredCard = hcIdx; needRepaint = true; }
+
+            // Hover action buttons
+            int haIdx = -1;
+            if (_btnTreeAddRect.Contains(e.Location)) haIdx = 0;
+            else if (_btnGiftAddRect.Contains(e.Location)) haIdx = 1;
+            else if (_btnLightsAddRect.Contains(e.Location)) haIdx = 2;
+            else if (_toggleHatRect.Contains(e.Location)) haIdx = 3;
+            else if (_btnClearAllRect.Contains(e.Location)) haIdx = 4;
+            else if (_btnCloseBottomRect.Contains(e.Location)) haIdx = 5;
+
+            if (haIdx != _hoveredAction) { _hoveredAction = haIdx; needRepaint = true; }
+
+            // Hover swatch
+            int hsIdx = -1;
+            for (int i = 0; i < 4; i++)
             {
-                if (_toggleRowRects[i].Contains(e.Location))
-                {
-                    _hoveredRow = i;
-                    break;
-                }
+                if (_giftSwatchRects[i].Contains(e.Location)) { hsIdx = i; break; }
             }
+            if (hsIdx != _hoveredSwatch) { _hoveredSwatch = hsIdx; needRepaint = true; }
 
-            _hoveredBtn = -1;
-            if (_btnAddGiftRect.Contains(e.Location)) _hoveredBtn = 0;
-            else if (_btnResetRect.Contains(e.Location)) _hoveredBtn = 1;
-            else if (_btnCloseBottomRect.Contains(e.Location)) _hoveredBtn = 2;
-
-            if (_hoverClose != oldClose || _hoveredRow != oldRow || _hoveredBtn != oldBtn)
-            {
-                Invalidate();
-            }
+            if (needRepaint) Invalidate();
         }
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
             _isDraggingForm = false;
+        }
+
+        protected override void OnDeactivate(EventArgs e)
+        {
+            base.OnDeactivate(e);
         }
 
         protected override void Dispose(bool disposing)
@@ -409,6 +550,7 @@ namespace BoWeather
                 if (_labelFont != null) _labelFont.Dispose();
                 if (_descFont != null) _descFont.Dispose();
                 if (_btnFont != null) _btnFont.Dispose();
+                if (_hintFont != null) _hintFont.Dispose();
             }
             base.Dispose(disposing);
         }

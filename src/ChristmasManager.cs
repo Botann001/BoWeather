@@ -7,7 +7,462 @@ using BoWeather.Particles;
 
 namespace BoWeather
 {
-    public class ChristmasGift
+    public class ChristmasLightsItem
+    {
+        public float X1;
+        public float Y1;
+        public float X2;
+        public float Y2;
+        public float SagDepth;
+        public bool IsGrabbedHandle1 = false;
+        public bool IsGrabbedHandle2 = false;
+        public bool IsGrabbedBody = false;
+        public bool IsHovered = false;
+        public int HoverPart = 0; // 0=none, 1=delete, 2=handle1, 3=handle2, 4=body
+
+        public ChristmasLightsItem(float x1, float y1, float x2, float y2)
+        {
+            X1 = x1;
+            Y1 = y1;
+            X2 = x2;
+            Y2 = y2;
+            RecalculateSag();
+        }
+
+        public void RecalculateSag()
+        {
+            float dx = X2 - X1;
+            float dy = Y2 - Y1;
+            float dist = (float)Math.Sqrt(dx * dx + dy * dy);
+            SagDepth = Math.Min(90f, Math.Max(18f, dist * 0.085f));
+        }
+
+        public PointF GetMidpoint()
+        {
+            return new PointF((X1 + X2) * 0.5f, (Y1 + Y2) * 0.5f);
+        }
+
+        public RectangleF GetDeleteButtonBounds()
+        {
+            PointF mid = GetMidpoint();
+            float my = mid.Y + SagDepth + 24f;
+            return new RectangleF(mid.X - 10f, my - 10f, 20f, 20f);
+        }
+
+        public RectangleF GetHandle1Bounds()
+        {
+            return new RectangleF(X1 - 14f, Y1 - 14f, 28f, 28f);
+        }
+
+        public RectangleF GetHandle2Bounds()
+        {
+            return new RectangleF(X2 - 14f, Y2 - 14f, 28f, 28f);
+        }
+
+        public PointF GetBezierPoint(float t)
+        {
+            float u = 1f - t;
+            PointF mid = GetMidpoint();
+            float ctrl1X = X1 + (mid.X - X1) * 0.55f;
+            float ctrl1Y = mid.Y + SagDepth;
+            float ctrl2X = mid.X + (X2 - mid.X) * 0.45f;
+            float ctrl2Y = mid.Y + SagDepth;
+
+            float x = u * u * u * X1 + 3f * u * u * t * ctrl1X + 3f * u * t * t * ctrl2X + t * t * t * X2;
+            float y = u * u * u * Y1 + 3f * u * u * t * ctrl1Y + 3f * u * t * t * ctrl2Y + t * t * t * Y2;
+            return new PointF(x, y);
+        }
+
+        public bool IsNearWire(float px, float py, float maxDist = 18f)
+        {
+            for (int i = 1; i < 16; i++)
+            {
+                float t = i / 16f;
+                PointF pt = GetBezierPoint(t);
+                float dx = px - pt.X;
+                float dy = py - pt.Y;
+                if (dx * dx + dy * dy <= maxDist * maxDist)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public void Draw(Graphics g, float animTick, bool isDarkMode)
+        {
+            Color[] bulbPalette = new Color[]
+            {
+                Color.FromArgb(239, 68, 68),   // Crimson Red
+                Color.FromArgb(245, 158, 11),  // Amber Gold
+                Color.FromArgb(16, 185, 129),  // Emerald Green
+                Color.FromArgb(6, 182, 212),   // Sky Cyan
+                Color.FromArgb(236, 72, 153),  // Hot Pink
+                Color.FromArgb(254, 240, 138)  // Warm White
+            };
+
+            PointF mid = GetMidpoint();
+            float ctrl1X = X1 + (mid.X - X1) * 0.55f;
+            float ctrl1Y = mid.Y + SagDepth;
+            float ctrl2X = mid.X + (X2 - mid.X) * 0.45f;
+            float ctrl2Y = mid.Y + SagDepth;
+
+            // 1. Draw Catenary Wire
+            using (GraphicsPath wirePath = new GraphicsPath())
+            {
+                wirePath.AddBezier(
+                    new PointF(X1, Y1),
+                    new PointF(ctrl1X, ctrl1Y),
+                    new PointF(ctrl2X, ctrl2Y),
+                    new PointF(X2, Y2));
+
+                using (Pen wirePen = new Pen(Color.FromArgb(200, 25, 45, 30), 2.2f))
+                {
+                    g.DrawPath(wirePen, wirePath);
+                }
+            }
+
+            // 2. Hanging Colored Bulbs
+            float dx = X2 - X1;
+            float dy = Y2 - Y1;
+            float dist = (float)Math.Sqrt(dx * dx + dy * dy);
+            int bulbCount = Math.Max(4, (int)(dist / 30f));
+
+            for (int b = 1; b < bulbCount; b++)
+            {
+                float t = (float)b / bulbCount;
+                PointF pt = GetBezierPoint(t);
+                Color bulbCol = bulbPalette[(b + (int)(X1 * 0.05f)) % bulbPalette.Length];
+                float pulse = (float)(0.68 + 0.32 * Math.Sin(animTick * 3.4f + b * 1.15f + X1 * 0.02f));
+                float r = 5.0f;
+
+                // Socket cap
+                using (SolidBrush capBrush = new SolidBrush(Color.FromArgb(220, 20, 35, 25)))
+                {
+                    g.FillRectangle(capBrush, pt.X - 1.8f, pt.Y - 2.5f, 3.6f, 3.5f);
+                }
+
+                // Bulb glow halo
+                using (SolidBrush halo = new SolidBrush(Color.FromArgb((int)(65 * pulse), bulbCol)))
+                {
+                    g.FillEllipse(halo, pt.X - r * 1.6f, pt.Y - r * 0.4f, r * 3.2f, r * 3.2f);
+                }
+
+                // Teardrop glass bulb
+                using (SolidBrush bulbBrush = new SolidBrush(Color.FromArgb((int)(245 * pulse), bulbCol)))
+                {
+                    g.FillEllipse(bulbBrush, pt.X - r, pt.Y + 0.5f, r * 2f, r * 2.3f);
+                }
+
+                // Center bright sparkle
+                using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(230 * pulse), 255, 255, 255)))
+                {
+                    g.FillEllipse(glint, pt.X - r * 0.45f, pt.Y + r * 0.4f, r * 0.7f, r * 0.7f);
+                }
+            }
+
+            // 3. Hanging Golden Star in the center
+            float starPulse = (float)(0.75 + 0.25 * Math.Sin(animTick * 2.6f + X1 * 0.01f));
+            float starCx = mid.X;
+            float starCy = mid.Y + SagDepth + 7f;
+
+            // Little wire connecting center to star
+            using (Pen starWirePen = new Pen(Color.FromArgb(180, 218, 165, 32), 1.2f))
+            {
+                g.DrawLine(starWirePen, starCx, starCy - 7f, starCx, starCy);
+            }
+
+            using (SolidBrush starGlow = new SolidBrush(Color.FromArgb((int)(60 * starPulse), 255, 215, 0)))
+            {
+                g.FillEllipse(starGlow, starCx - 18f, starCy - 18f, 36f, 36f);
+            }
+            ChristmasManager.DrawStarPolygon(g, starCx, starCy, 9.5f, 4.2f, Color.FromArgb(255, 215, 0), Color.FromArgb(245, 158, 11));
+
+            // 4. Resize/Stretch Handles (Left & Right)
+            DrawHandle(g, X1, Y1, IsGrabbedHandle1, HoverPart == 2);
+            DrawHandle(g, X2, Y2, IsGrabbedHandle2, HoverPart == 3);
+
+            // 5. Delete Button (X)
+            RectangleF delRect = GetDeleteButtonBounds();
+            bool isDelHover = (HoverPart == 1);
+            ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, isDelHover);
+        }
+
+        private void DrawHandle(Graphics g, float hx, float hy, bool isGrabbed, bool isHover)
+        {
+            float baseR = isGrabbed ? 14f : (isHover ? 13f : 10f);
+
+            // Outer golden glow
+            using (SolidBrush halo = new SolidBrush(Color.FromArgb(isGrabbed ? 120 : (isHover ? 90 : 50), 250, 204, 21)))
+            {
+                g.FillEllipse(halo, hx - baseR * 1.5f, hy - baseR * 1.5f, baseR * 3f, baseR * 3f);
+            }
+
+            // Outer ring
+            using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(240, 30, 36, 45)))
+            {
+                g.FillEllipse(bgBrush, hx - baseR, hy - baseR, baseR * 2f, baseR * 2f);
+            }
+
+            using (Pen ringPen = new Pen(isHover || isGrabbed ? Color.FromArgb(255, 255, 215, 0) : Color.White, 2f))
+            {
+                g.DrawEllipse(ringPen, hx - baseR, hy - baseR, baseR * 2f, baseR * 2f);
+            }
+
+            // Center gold core
+            float coreR = baseR * 0.42f;
+            using (SolidBrush coreBrush = new SolidBrush(Color.FromArgb(255, 250, 204, 21)))
+            {
+                g.FillEllipse(coreBrush, hx - coreR, hy - coreR, coreR * 2f, coreR * 2f);
+            }
+        }
+    }
+
+    public class ChristmasTreeItem
+    {
+        public float X;
+        public float Y;
+        public float Width = 96f;
+        public float Height = 138f;
+        public bool IsGrabbed = false;
+        public float GrabOffsetX = 0f;
+        public float GrabOffsetY = 0f;
+        public IntPtr AttachedWindow = IntPtr.Zero;
+        public float WindowOffsetX = 0f;
+        public float WindowOffsetY = 0f;
+        public bool IsHovered = false;
+        public bool HoverDelete = false;
+
+        public ChristmasTreeItem(float x, float y)
+        {
+            X = x;
+            Y = y;
+        }
+
+        public RectangleF GetBounds()
+        {
+            return new RectangleF(X - Width * 0.5f, Y - Height, Width, Height);
+        }
+
+        public RectangleF GetDeleteButtonBounds()
+        {
+            return new RectangleF(X + Width * 0.42f - 10f, Y - Height + 10f - 10f, 20f, 20f);
+        }
+
+        public void Draw(Graphics g, float animTick)
+        {
+            float cx = X;
+            float cy = Y;
+            float w = Width;
+            float h = Height;
+
+            // 1. Soft contact shadow under the base
+            float shadowW = w * 0.95f;
+            float shadowH = 14f;
+            using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb(60, 15, 30, 45)))
+            {
+                g.FillEllipse(shadowBrush, cx - shadowW * 0.5f, cy - shadowH * 0.5f, shadowW, shadowH);
+            }
+
+            // 2. Wooden Trunk
+            float trunkW = 18f;
+            float trunkH = 26f;
+            RectangleF trunkRect = new RectangleF(cx - trunkW * 0.5f, cy - trunkH, trunkW, trunkH);
+            using (GraphicsPath tp = VectorIcons.CreateRoundedRect(trunkRect, 3f))
+            using (LinearGradientBrush trunkGrad = new LinearGradientBrush(
+                new PointF(trunkRect.Left, trunkRect.Top),
+                new PointF(trunkRect.Right, trunkRect.Top),
+                Color.FromArgb(255, 120, 74, 42),
+                Color.FromArgb(255, 78, 46, 22)))
+            {
+                g.FillPath(trunkGrad, tp);
+            }
+
+            // 3. Three Cascading Tiers of Pine Foliage
+            DrawPineTier(g, cx, cy - 20f, w * 0.96f, 44f, 0);
+            DrawPineTier(g, cx, cy - 54f, w * 0.76f, 38f, 1);
+            DrawPineTier(g, cx, cy - 84f, w * 0.54f, 36f, 2);
+
+            // 4. Glossy Colorful Baubles
+            PointF[] baublePos = new PointF[]
+            {
+                new PointF(cx - 28f, cy - 32f),
+                new PointF(cx + 26f, cy - 35f),
+                new PointF(cx - 8f,  cy - 40f),
+                new PointF(cx + 36f, cy - 38f),
+                new PointF(cx - 22f, cy - 64f),
+                new PointF(cx + 18f, cy - 66f),
+                new PointF(cx - 4f,  cy - 72f),
+                new PointF(cx + 24f, cy - 70f),
+                new PointF(cx - 10f, cy - 95f),
+                new PointF(cx + 11f, cy - 97f)
+            };
+
+            Color[] baubleColors = new Color[]
+            {
+                Color.FromArgb(220, 38, 38),   // Crimson Red
+                Color.FromArgb(250, 204, 21),  // Shiny Gold
+                Color.FromArgb(14, 165, 233),  // Sky Blue
+                Color.FromArgb(236, 72, 153),  // Pink
+                Color.FromArgb(250, 204, 21),  // Shiny Gold
+                Color.FromArgb(220, 38, 38),   // Crimson Red
+                Color.FromArgb(224, 242, 254), // Ice White
+                Color.FromArgb(236, 72, 153),  // Pink
+                Color.FromArgb(220, 38, 38),   // Crimson Red
+                Color.FromArgb(250, 204, 21)   // Shiny Gold
+            };
+
+            for (int b = 0; b < baublePos.Length; b++)
+            {
+                float bx = baublePos[b].X;
+                float by = baublePos[b].Y;
+                float br = 5.2f;
+                Color bCol = baubleColors[b % baubleColors.Length];
+
+                // Cap hanging wire
+                using (Pen capPen = new Pen(Color.FromArgb(120, 60, 40, 10), 1f))
+                {
+                    g.DrawLine(capPen, bx, by - br - 3f, bx, by - br);
+                }
+
+                // Bauble 3D Sphere
+                using (GraphicsPath bp = new GraphicsPath())
+                {
+                    bp.AddEllipse(bx - br, by - br, br * 2f, br * 2f);
+                    Color darkB = Color.FromArgb(
+                        (int)(bCol.R * 0.65f),
+                        (int)(bCol.G * 0.65f),
+                        (int)(bCol.B * 0.65f));
+
+                    using (LinearGradientBrush bGrad = new LinearGradientBrush(
+                        new PointF(bx - br * 0.5f, by - br * 0.5f),
+                        new PointF(bx + br, by + br),
+                        bCol, darkB))
+                    {
+                        g.FillPath(bGrad, bp);
+                    }
+                }
+
+                // Specular Glint
+                using (SolidBrush glint = new SolidBrush(Color.FromArgb(210, 255, 255, 255)))
+                {
+                    g.FillEllipse(glint, bx - br * 0.45f, by - br * 0.45f, br * 0.65f, br * 0.65f);
+                }
+            }
+
+            // 5. Twinkling Tree Lights
+            PointF[] lightPos = new PointF[]
+            {
+                new PointF(cx - 16f, cy - 30f),
+                new PointF(cx + 8f,  cy - 34f),
+                new PointF(cx - 36f, cy - 28f),
+                new PointF(cx + 34f, cy - 29f),
+                new PointF(cx - 12f, cy - 60f),
+                new PointF(cx + 8f,  cy - 62f),
+                new PointF(cx - 24f, cy - 58f),
+                new PointF(cx + 25f, cy - 59f),
+                new PointF(cx - 4f,  cy - 88f),
+                new PointF(cx + 5f,  cy - 92f),
+                new PointF(cx - 14f, cy - 87f),
+                new PointF(cx + 15f, cy - 89f)
+            };
+
+            for (int l = 0; l < lightPos.Length; l++)
+            {
+                float lx = lightPos[l].X;
+                float ly = lightPos[l].Y;
+                float pulse = (float)(0.60 + 0.40 * Math.Sin(animTick * 3.5f + l * 0.85f));
+                int alpha = (int)(255 * pulse);
+
+                Color lCol = (l % 3 == 0) ? Color.FromArgb(255, 235, 59) :
+                             (l % 3 == 1) ? Color.FromArgb(255, 255, 255) :
+                                            Color.FromArgb(56, 189, 248);
+
+                // Glow aura
+                using (SolidBrush glow = new SolidBrush(Color.FromArgb((int)(75 * pulse), lCol)))
+                {
+                    g.FillEllipse(glow, lx - 5f, ly - 5f, 10f, 10f);
+                }
+                // Center point
+                using (SolidBrush core = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
+                {
+                    g.FillEllipse(core, lx - 1.8f, ly - 1.8f, 3.6f, 3.6f);
+                }
+            }
+
+            // 6. Radiant Golden Star ⭐ on Tree Peak
+            float starCx = cx;
+            float starCy = cy - 120f;
+            float starPulse = (float)(0.80 + 0.20 * Math.Sin(animTick * 2.8f));
+
+            using (SolidBrush starGlow = new SolidBrush(Color.FromArgb((int)(65 * starPulse), 255, 215, 0)))
+            {
+                g.FillEllipse(starGlow, starCx - 22f, starCy - 22f, 44f, 44f);
+            }
+            ChristmasManager.DrawStarPolygon(g, starCx, starCy, 14f, 6.2f, Color.FromArgb(255, 215, 0), Color.FromArgb(245, 158, 11));
+
+            // 7. Delete Button (X)
+            RectangleF delRect = GetDeleteButtonBounds();
+            ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, HoverDelete);
+        }
+
+        private void DrawPineTier(Graphics g, float cx, float cy, float tierW, float tierH, int tierIndex)
+        {
+            float halfW = tierW * 0.5f;
+            float topY = cy - tierH;
+            float botY = cy;
+
+            PointF[] pts = new PointF[]
+            {
+                new PointF(cx, topY),
+                new PointF(cx + halfW * 0.35f, topY + tierH * 0.35f),
+                new PointF(cx + halfW * 0.28f, topY + tierH * 0.40f),
+                new PointF(cx + halfW * 0.68f, topY + tierH * 0.72f),
+                new PointF(cx + halfW * 0.58f, topY + tierH * 0.76f),
+                new PointF(cx + halfW, botY),
+                new PointF(cx + halfW * 0.65f, botY - 5f),
+                new PointF(cx + halfW * 0.35f, botY - 3f),
+                new PointF(cx, botY - 6f),
+                new PointF(cx - halfW * 0.35f, botY - 3f),
+                new PointF(cx - halfW * 0.65f, botY - 5f),
+                new PointF(cx - halfW, botY),
+                new PointF(cx - halfW * 0.58f, topY + tierH * 0.76f),
+                new PointF(cx - halfW * 0.68f, topY + tierH * 0.72f),
+                new PointF(cx - halfW * 0.28f, topY + tierH * 0.40f),
+                new PointF(cx - halfW * 0.35f, topY + tierH * 0.35f)
+            };
+
+            using (GraphicsPath gp = new GraphicsPath())
+            {
+                gp.AddPolygon(pts);
+
+                Color cTop = Color.FromArgb(255, 46, 138, 70);
+                Color cBot = Color.FromArgb(255, 20, 76, 38);
+
+                using (LinearGradientBrush grad = new LinearGradientBrush(
+                    new PointF(cx, topY),
+                    new PointF(cx, botY),
+                    cTop, cBot))
+                {
+                    g.FillPath(grad, gp);
+                }
+
+                using (Pen rimPen = new Pen(Color.FromArgb(90, 15, 60, 30), 1f))
+                {
+                    g.DrawPath(rimPen, gp);
+                }
+            }
+
+            // Fluffy white snow caps on branch shoulders
+            using (SolidBrush snowBrush = new SolidBrush(Color.FromArgb(235, 255, 255, 255)))
+            {
+                g.FillEllipse(snowBrush, cx - halfW * 0.72f, topY + tierH * 0.68f - 3f, halfW * 0.52f, 6.5f);
+                g.FillEllipse(snowBrush, cx + halfW * 0.20f, topY + tierH * 0.68f - 3f, halfW * 0.52f, 6.5f);
+            }
+        }
+    }
+
+    public class ChristmasGiftItem
     {
         public float X;
         public float Y;
@@ -24,8 +479,10 @@ namespace BoWeather
         public IntPtr AttachedWindow = IntPtr.Zero;
         public float WindowOffsetX = 0f;
         public float WindowOffsetY = 0f;
+        public bool IsHovered = false;
+        public bool HoverDelete = false;
 
-        public ChristmasGift(float x, float y, Color boxColor, Color ribbonColor)
+        public ChristmasGiftItem(float x, float y, Color boxColor, Color ribbonColor)
         {
             X = x;
             Y = y;
@@ -36,6 +493,11 @@ namespace BoWeather
         public RectangleF GetBounds()
         {
             return new RectangleF(X - Width * 0.5f, Y - Height, Width, Height);
+        }
+
+        public RectangleF GetDeleteButtonBounds()
+        {
+            return new RectangleF(X + Width * 0.5f + 2f - 9f, Y - Height - 2f - 9f, 18f, 18f);
         }
 
         public void Draw(Graphics g, float alpha = 1.0f)
@@ -141,52 +603,47 @@ namespace BoWeather
             using (SolidBrush bowBrush = new SolidBrush(Color.FromArgb((int)(255 * alpha), RibbonColor)))
             using (Pen bowPen = new Pen(Color.FromArgb((int)(110 * alpha), 50, 30, 10), 1f))
             {
-                // Left bow loop
                 GraphicsPath leftLoop = new GraphicsPath();
                 leftLoop.AddEllipse(bowCx - loopW * 1.05f, bowCy - loopH * 0.85f, loopW, loopH);
                 g.FillPath(bowBrush, leftLoop);
                 g.DrawPath(bowPen, leftLoop);
 
-                // Right bow loop
                 GraphicsPath rightLoop = new GraphicsPath();
                 rightLoop.AddEllipse(bowCx + loopW * 0.05f, bowCy - loopH * 0.85f, loopW, loopH);
                 g.FillPath(bowBrush, rightLoop);
                 g.DrawPath(bowPen, rightLoop);
 
-                // Central bow knot
                 float knotR = loopW * 0.38f;
                 g.FillEllipse(bowBrush, bowCx - knotR, bowCy - knotR * 0.8f, knotR * 2f, knotR * 1.6f);
                 g.DrawEllipse(bowPen, bowCx - knotR, bowCy - knotR * 0.8f, knotR * 2f, knotR * 1.6f);
             }
+
+            // 6. Delete Button (X)
+            RectangleF delRect = GetDeleteButtonBounds();
+            ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, HoverDelete);
         }
     }
 
     public class ChristmasManager
     {
-        // Settings
-        public bool ShowTree { get; set; }
-        public bool ShowGifts { get; set; }
-        public bool ShowLights { get; set; }
-        public bool ShowStarLights { get; set; }
+        public const int PART_NONE = 0;
+        public const int PART_DELETE = 1;
+        public const int PART_HANDLE1 = 2;
+        public const int PART_HANDLE2 = 3;
+        public const int PART_BODY = 4;
+
+        public List<ChristmasTreeItem> Trees { get; private set; }
+        public List<ChristmasGiftItem> Gifts { get; private set; }
+        public List<ChristmasLightsItem> Lights { get; private set; }
         public bool ShowSantaHat { get; set; }
 
-        // Tree State
-        public float TreeX { get; set; }
-        public float TreeY { get; set; }
-        public float TreeWidth { get; set; }
-        public float TreeHeight { get; set; }
-        public bool TreeIsGrabbed { get; set; }
-        public float TreeGrabOffsetX { get; set; }
-        public float TreeGrabOffsetY { get; set; }
-        public IntPtr TreeAttachedWindow { get; set; }
-        public float TreeWindowOffsetX { get; set; }
-        public float TreeWindowOffsetY { get; set; }
+        public int TotalItemCount
+        {
+            get { return Trees.Count + Gifts.Count + Lights.Count; }
+        }
 
-        // Gifts list
-        public List<ChristmasGift> Gifts { get; private set; }
-
-        // Dragging & Interaction
         private object _grabbedItem = null;
+        private int _grabbedPart = PART_NONE;
         private int _prevMouseX = -1;
         private int _prevMouseY = -1;
         private float _animTick = 0f;
@@ -195,84 +652,237 @@ namespace BoWeather
 
         public ChristmasManager()
         {
-            ShowTree = true;
-            ShowGifts = true;
-            ShowLights = true;
-            ShowStarLights = true;
-            ShowSantaHat = true;
+            Trees = new List<ChristmasTreeItem>();
+            Gifts = new List<ChristmasGiftItem>();
+            Lights = new List<ChristmasLightsItem>();
+            ShowSantaHat = false;
 
-            TreeWidth = 98f;
-            TreeHeight = 138f;
-            TreeX = -1f;
-            TreeY = -1f;
-
-            Gifts = new List<ChristmasGift>();
             _settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "christmas_settings.txt");
             LoadSettings();
         }
 
-        public void InitDefaultsIfNeeded(int screenWidth, int floorY)
+        public ChristmasTreeItem AddTree(float x, float y)
         {
-            if (TreeX < 0 || TreeY < 0)
-            {
-                TreeX = screenWidth * 0.74f;
-                TreeY = floorY - 6f;
-            }
+            ChristmasTreeItem item = new ChristmasTreeItem(x, y);
+            Trees.Add(item);
+            SaveSettings();
+            return item;
+        }
 
-            if (Gifts.Count == 0)
+        public ChristmasGiftItem AddGift(float x, float y, Color? boxCol = null, Color? ribCol = null)
+        {
+            Color bCol = boxCol.HasValue ? boxCol.Value : Color.FromArgb(220, 38, 38);
+            Color rCol = ribCol.HasValue ? ribCol.Value : Color.FromArgb(255, 215, 0);
+
+            ChristmasGiftItem item = new ChristmasGiftItem(x, y, bCol, rCol);
+            Gifts.Add(item);
+            SaveSettings();
+            return item;
+        }
+
+        public ChristmasLightsItem AddLights(float x1, float y1, float x2, float y2)
+        {
+            ChristmasLightsItem item = new ChristmasLightsItem(x1, y1, x2, y2);
+            Lights.Add(item);
+            SaveSettings();
+            return item;
+        }
+
+        public void RemoveItem(object item)
+        {
+            if (item is ChristmasTreeItem)
             {
-                // Add 3 charming gift boxes next to the tree
-                Gifts.Add(new ChristmasGift(TreeX - 44f, floorY - 6f, Color.FromArgb(220, 38, 38), Color.FromArgb(255, 215, 0))); // Red / Gold
-                Gifts.Add(new ChristmasGift(TreeX + 46f, floorY - 6f, Color.FromArgb(22, 163, 74), Color.FromArgb(254, 240, 138))); // Green / Cream
-                Gifts.Add(new ChristmasGift(TreeX - 74f, floorY - 6f, Color.FromArgb(37, 99, 235), Color.FromArgb(255, 255, 255))); // Blue / White
+                Trees.Remove((ChristmasTreeItem)item);
+                SaveSettings();
+            }
+            else if (item is ChristmasGiftItem)
+            {
+                Gifts.Remove((ChristmasGiftItem)item);
+                SaveSettings();
+            }
+            else if (item is ChristmasLightsItem)
+            {
+                Lights.Remove((ChristmasLightsItem)item);
+                SaveSettings();
             }
         }
 
-        public RectangleF GetTreeBounds()
+        public void ClearAll()
         {
-            return new RectangleF(TreeX - TreeWidth * 0.5f, TreeY - TreeHeight, TreeWidth, TreeHeight);
+            Trees.Clear();
+            Gifts.Clear();
+            Lights.Clear();
+            SaveSettings();
         }
 
-        public object HitTest(float mouseX, float mouseY)
+        public void UpdateHover(float mouseX, float mouseY)
         {
-            // 1. Check Gifts first (topmost first)
-            if (ShowGifts)
+            // Update hover flags for visual affordances (delete buttons, stretch handles)
+            for (int i = 0; i < Lights.Count; i++)
             {
-                for (int i = Gifts.Count - 1; i >= 0; i--)
+                ChristmasLightsItem l = Lights[i];
+                l.IsHovered = false;
+                l.HoverPart = PART_NONE;
+
+                if (l.GetDeleteButtonBounds().Contains(mouseX, mouseY))
                 {
-                    ChristmasGift g = Gifts[i];
-                    RectangleF b = g.GetBounds();
-                    b.Inflate(8f, 8f);
-                    if (b.Contains(mouseX, mouseY))
-                    {
-                        return g;
-                    }
+                    l.IsHovered = true;
+                    l.HoverPart = PART_DELETE;
+                }
+                else if (l.GetHandle1Bounds().Contains(mouseX, mouseY))
+                {
+                    l.IsHovered = true;
+                    l.HoverPart = PART_HANDLE1;
+                }
+                else if (l.GetHandle2Bounds().Contains(mouseX, mouseY))
+                {
+                    l.IsHovered = true;
+                    l.HoverPart = PART_HANDLE2;
+                }
+                else if (l.IsNearWire(mouseX, mouseY, 20f))
+                {
+                    l.IsHovered = true;
+                    l.HoverPart = PART_BODY;
                 }
             }
 
-            // 2. Check Christmas Tree
-            if (ShowTree)
+            for (int i = 0; i < Trees.Count; i++)
             {
-                RectangleF tb = GetTreeBounds();
-                tb.Inflate(6f, 6f);
+                ChristmasTreeItem t = Trees[i];
+                t.IsHovered = t.GetBounds().Contains(mouseX, mouseY);
+                t.HoverDelete = t.GetDeleteButtonBounds().Contains(mouseX, mouseY);
+            }
+
+            for (int i = 0; i < Gifts.Count; i++)
+            {
+                ChristmasGiftItem g = Gifts[i];
+                g.IsHovered = g.GetBounds().Contains(mouseX, mouseY);
+                g.HoverDelete = g.GetDeleteButtonBounds().Contains(mouseX, mouseY);
+            }
+        }
+
+        public object HitTest(float mouseX, float mouseY, out int hitPart)
+        {
+            hitPart = PART_NONE;
+
+            // 1. Check Delete Buttons FIRST across all items so (X) click always succeeds
+            for (int i = Lights.Count - 1; i >= 0; i--)
+            {
+                if (Lights[i].GetDeleteButtonBounds().Contains(mouseX, mouseY))
+                {
+                    hitPart = PART_DELETE;
+                    return Lights[i];
+                }
+            }
+
+            for (int i = Trees.Count - 1; i >= 0; i--)
+            {
+                if (Trees[i].GetDeleteButtonBounds().Contains(mouseX, mouseY))
+                {
+                    hitPart = PART_DELETE;
+                    return Trees[i];
+                }
+            }
+
+            for (int i = Gifts.Count - 1; i >= 0; i--)
+            {
+                if (Gifts[i].GetDeleteButtonBounds().Contains(mouseX, mouseY))
+                {
+                    hitPart = PART_DELETE;
+                    return Gifts[i];
+                }
+            }
+
+            // 2. Check Lights Handles (Left & Right stretch anchors)
+            for (int i = Lights.Count - 1; i >= 0; i--)
+            {
+                ChristmasLightsItem l = Lights[i];
+                if (l.GetHandle1Bounds().Contains(mouseX, mouseY))
+                {
+                    hitPart = PART_HANDLE1;
+                    return l;
+                }
+                if (l.GetHandle2Bounds().Contains(mouseX, mouseY))
+                {
+                    hitPart = PART_HANDLE2;
+                    return l;
+                }
+            }
+
+            // 3. Check Gifts (clickable / draggable)
+            for (int i = Gifts.Count - 1; i >= 0; i--)
+            {
+                ChristmasGiftItem g = Gifts[i];
+                RectangleF b = g.GetBounds();
+                b.Inflate(6f, 6f);
+                if (b.Contains(mouseX, mouseY))
+                {
+                    hitPart = PART_BODY;
+                    return g;
+                }
+            }
+
+            // 4. Check Trees
+            for (int i = Trees.Count - 1; i >= 0; i--)
+            {
+                ChristmasTreeItem t = Trees[i];
+                RectangleF tb = t.GetBounds();
+                tb.Inflate(4f, 4f);
                 if (tb.Contains(mouseX, mouseY))
                 {
-                    return "tree";
+                    hitPart = PART_BODY;
+                    return t;
+                }
+            }
+
+            // 5. Check Lights Wire Body
+            for (int i = Lights.Count - 1; i >= 0; i--)
+            {
+                ChristmasLightsItem l = Lights[i];
+                if (l.IsNearWire(mouseX, mouseY, 16f))
+                {
+                    hitPart = PART_BODY;
+                    return l;
                 }
             }
 
             return null;
         }
 
-        public void StartDrag(object hit, float mouseX, float mouseY)
+        public void StartDrag(object hit, int hitPart, float mouseX, float mouseY)
         {
             _grabbedItem = hit;
+            _grabbedPart = hitPart;
             _prevMouseX = (int)mouseX;
             _prevMouseY = (int)mouseY;
 
-            if (hit is ChristmasGift)
+            if (hit is ChristmasLightsItem)
             {
-                ChristmasGift g = (ChristmasGift)hit;
+                ChristmasLightsItem l = (ChristmasLightsItem)hit;
+                if (hitPart == PART_HANDLE1)
+                {
+                    l.IsGrabbedHandle1 = true;
+                }
+                else if (hitPart == PART_HANDLE2)
+                {
+                    l.IsGrabbedHandle2 = true;
+                }
+                else
+                {
+                    l.IsGrabbedBody = true;
+                }
+            }
+            else if (hit is ChristmasTreeItem)
+            {
+                ChristmasTreeItem t = (ChristmasTreeItem)hit;
+                t.IsGrabbed = true;
+                t.AttachedWindow = IntPtr.Zero;
+                t.GrabOffsetX = mouseX - t.X;
+                t.GrabOffsetY = mouseY - t.Y;
+            }
+            else if (hit is ChristmasGiftItem)
+            {
+                ChristmasGiftItem g = (ChristmasGiftItem)hit;
                 g.IsGrabbed = true;
                 g.IsFalling = false;
                 g.AttachedWindow = IntPtr.Zero;
@@ -280,13 +890,6 @@ namespace BoWeather
                 g.GrabOffsetY = mouseY - g.Y;
                 g.Vx = 0f;
                 g.Vy = 0f;
-            }
-            else if ("tree".Equals(hit))
-            {
-                TreeIsGrabbed = true;
-                TreeAttachedWindow = IntPtr.Zero;
-                TreeGrabOffsetX = mouseX - TreeX;
-                TreeGrabOffsetY = mouseY - TreeY;
             }
         }
 
@@ -297,9 +900,43 @@ namespace BoWeather
             _prevMouseX = (int)mouseX;
             _prevMouseY = (int)mouseY;
 
-            if (_grabbedItem is ChristmasGift)
+            if (_grabbedItem is ChristmasLightsItem)
             {
-                ChristmasGift g = (ChristmasGift)_grabbedItem;
+                ChristmasLightsItem l = (ChristmasLightsItem)_grabbedItem;
+                if (_grabbedPart == PART_HANDLE1)
+                {
+                    l.X1 = mouseX;
+                    l.Y1 = mouseY;
+                    l.RecalculateSag();
+                }
+                else if (_grabbedPart == PART_HANDLE2)
+                {
+                    l.X2 = mouseX;
+                    l.Y2 = mouseY;
+                    l.RecalculateSag();
+                }
+                else if (_grabbedPart == PART_BODY)
+                {
+                    l.X1 += dx;
+                    l.Y1 += dy;
+                    l.X2 += dx;
+                    l.Y2 += dy;
+                }
+            }
+            else if (_grabbedItem is ChristmasTreeItem)
+            {
+                ChristmasTreeItem t = (ChristmasTreeItem)_grabbedItem;
+                t.X = mouseX - t.GrabOffsetX;
+                t.Y = mouseY - t.GrabOffsetY;
+
+                if (Math.Abs(dx) > 4f && onSnowPuff != null && _rand.Next(3) == 0)
+                {
+                    onSnowPuff(t.X, t.Y, 3);
+                }
+            }
+            else if (_grabbedItem is ChristmasGiftItem)
+            {
+                ChristmasGiftItem g = (ChristmasGiftItem)_grabbedItem;
                 g.X = mouseX - g.GrabOffsetX;
                 g.Y = mouseY - g.GrabOffsetY;
                 g.Vx = dx * 0.85f;
@@ -310,27 +947,70 @@ namespace BoWeather
                     onSnowPuff(g.X, g.Y, 2);
                 }
             }
-            else if ("tree".Equals(_grabbedItem))
-            {
-                TreeX = mouseX - TreeGrabOffsetX;
-                TreeY = mouseY - TreeGrabOffsetY;
-
-                if (Math.Abs(dx) > 4f && onSnowPuff != null && _rand.Next(3) == 0)
-                {
-                    onSnowPuff(TreeX, TreeY, 3);
-                }
-            }
         }
 
         public void OnMouseUp(float mouseX, float mouseY, WindowManager winMgr, int floorY, Action<float, float, int> onSnowPuff)
         {
-            if (_grabbedItem is ChristmasGift)
+            if (_grabbedItem is ChristmasLightsItem)
             {
-                ChristmasGift g = (ChristmasGift)_grabbedItem;
+                ChristmasLightsItem l = (ChristmasLightsItem)_grabbedItem;
+                l.IsGrabbedHandle1 = false;
+                l.IsGrabbedHandle2 = false;
+                l.IsGrabbedBody = false;
+                SaveSettings();
+            }
+            else if (_grabbedItem is ChristmasTreeItem)
+            {
+                ChristmasTreeItem t = (ChristmasTreeItem)_grabbedItem;
+                t.IsGrabbed = false;
+                bool placed = false;
+
+                // Land on floating window top
+                if (winMgr != null)
+                {
+                    List<WindowInfo> windows = winMgr.ActiveWindows;
+                    for (int w = 0; w < windows.Count; w++)
+                    {
+                        WindowInfo win = windows[w];
+                        Rectangle r = win.Bounds;
+                        if (t.X >= r.Left && t.X <= r.Right &&
+                            t.Y >= r.Top - 45f && t.Y <= r.Top + 25f)
+                        {
+                            t.Y = r.Top;
+                            t.AttachedWindow = win.Handle;
+                            t.WindowOffsetX = t.X - r.Left;
+                            t.WindowOffsetY = r.Top - t.Y;
+                            placed = true;
+                            if (onSnowPuff != null) onSnowPuff(t.X, t.Y, 8);
+                            break;
+                        }
+                    }
+                }
+
+                // Land on Taskbar
+                if (!placed && t.Y >= floorY - 70f)
+                {
+                    t.Y = floorY - 6f;
+                    t.AttachedWindow = IntPtr.Zero;
+                    placed = true;
+                    if (onSnowPuff != null) onSnowPuff(t.X, t.Y, 8);
+                }
+
+                if (!placed)
+                {
+                    // Snap safely to floor if released in the air
+                    t.Y = floorY - 6f;
+                    t.AttachedWindow = IntPtr.Zero;
+                }
+
+                SaveSettings();
+            }
+            else if (_grabbedItem is ChristmasGiftItem)
+            {
+                ChristmasGiftItem g = (ChristmasGiftItem)_grabbedItem;
                 g.IsGrabbed = false;
                 bool placed = false;
 
-                // Check landing on floating window ledge
                 if (winMgr != null)
                 {
                     List<WindowInfo> windows = winMgr.ActiveWindows;
@@ -355,7 +1035,6 @@ namespace BoWeather
                     }
                 }
 
-                // Check landing on Taskbar snow
                 if (!placed && g.Y >= floorY - 50f)
                 {
                     g.Y = floorY - 6f;
@@ -372,209 +1051,116 @@ namespace BoWeather
                     g.IsFalling = true;
                     g.AttachedWindow = IntPtr.Zero;
                 }
-            }
-            else if ("tree".Equals(_grabbedItem))
-            {
-                TreeIsGrabbed = false;
-                bool placed = false;
-
-                // Check landing on floating window ledge
-                if (winMgr != null)
-                {
-                    List<WindowInfo> windows = winMgr.ActiveWindows;
-                    for (int w = 0; w < windows.Count; w++)
-                    {
-                        WindowInfo win = windows[w];
-                        Rectangle r = win.Bounds;
-                        if (TreeX >= r.Left && TreeX <= r.Right &&
-                            TreeY >= r.Top - 45f && TreeY <= r.Top + 25f)
-                        {
-                            TreeY = r.Top;
-                            TreeAttachedWindow = win.Handle;
-                            TreeWindowOffsetX = TreeX - r.Left;
-                            TreeWindowOffsetY = r.Top - TreeY;
-                            placed = true;
-                            if (onSnowPuff != null) onSnowPuff(TreeX, TreeY, 8);
-                            break;
-                        }
-                    }
-                }
-
-                // Check landing on Taskbar
-                if (!placed && TreeY >= floorY - 70f)
-                {
-                    TreeY = floorY - 6f;
-                    TreeAttachedWindow = IntPtr.Zero;
-                    placed = true;
-                    if (onSnowPuff != null) onSnowPuff(TreeX, TreeY, 8);
-                }
-
-                if (!placed)
-                {
-                    // Snap safely to floor if released in the air
-                    TreeY = floorY - 6f;
-                    TreeAttachedWindow = IntPtr.Zero;
-                }
 
                 SaveSettings();
             }
 
             _grabbedItem = null;
-        }
-
-        public void AddGift(float mouseX, float mouseY, int floorY)
-        {
-            Color[] boxColors = new Color[]
-            {
-                Color.FromArgb(220, 38, 38),   // Red
-                Color.FromArgb(22, 163, 74),   // Green
-                Color.FromArgb(37, 99, 235),   // Blue
-                Color.FromArgb(217, 119, 6),   // Amber Gold
-                Color.FromArgb(147, 51, 234)   // Purple
-            };
-
-            Color[] ribColors = new Color[]
-            {
-                Color.FromArgb(255, 215, 0),   // Gold
-                Color.FromArgb(255, 255, 255), // White
-                Color.FromArgb(239, 68, 68)    // Red
-            };
-
-            int idx = Gifts.Count % boxColors.Length;
-            Color bCol = boxColors[idx];
-            Color rCol = ribColors[idx % ribColors.Length];
-
-            float gx = (mouseX > 50 && mouseX < 1850) ? mouseX : TreeX + (float)(_rand.NextDouble() * 80 - 40);
-            float gy = (mouseY > 100 && mouseY < floorY) ? mouseY : floorY - 6f;
-
-            Gifts.Add(new ChristmasGift(gx, gy, bCol, rCol));
-        }
-
-        public void RemoveGift(ChristmasGift g)
-        {
-            if (g != null && Gifts.Contains(g))
-            {
-                Gifts.Remove(g);
-            }
-        }
-
-        public void ResetPositions(int screenWidth, int floorY)
-        {
-            TreeX = screenWidth * 0.74f;
-            TreeY = floorY - 6f;
-            TreeAttachedWindow = IntPtr.Zero;
-
-            Gifts.Clear();
-            Gifts.Add(new ChristmasGift(TreeX - 44f, floorY - 6f, Color.FromArgb(220, 38, 38), Color.FromArgb(255, 215, 0)));
-            Gifts.Add(new ChristmasGift(TreeX + 46f, floorY - 6f, Color.FromArgb(22, 163, 74), Color.FromArgb(254, 240, 138)));
-            Gifts.Add(new ChristmasGift(TreeX - 74f, floorY - 6f, Color.FromArgb(37, 99, 235), Color.FromArgb(255, 255, 255)));
-
-            SaveSettings();
+            _grabbedPart = PART_NONE;
         }
 
         public void Update(WindowManager winMgr, int screenWidth, int screenHeight, int floorY, Action<float, float, int> onSnowPuff)
         {
             _animTick += 0.045f;
-            InitDefaultsIfNeeded(screenWidth, floorY);
 
-            // 1. Update Christmas Tree Window Attachment
-            if (!TreeIsGrabbed && TreeAttachedWindow != IntPtr.Zero && winMgr != null)
+            // 1. Update Trees Window Attachment
+            for (int i = 0; i < Trees.Count; i++)
             {
-                Rectangle curBounds;
-                bool hasMoved;
-                if (winMgr.TryGetWindowCurrentBounds(TreeAttachedWindow, out curBounds, out hasMoved))
+                ChristmasTreeItem t = Trees[i];
+                if (!t.IsGrabbed && t.AttachedWindow != IntPtr.Zero && winMgr != null)
                 {
-                    if (TreeX < curBounds.Left - 10f || TreeX > curBounds.Right + 10f)
+                    Rectangle curBounds;
+                    bool hasMoved;
+                    if (winMgr.TryGetWindowCurrentBounds(t.AttachedWindow, out curBounds, out hasMoved))
                     {
-                        // Tree fell off window ledge
-                        TreeAttachedWindow = IntPtr.Zero;
-                        TreeY = floorY - 6f;
-                        if (onSnowPuff != null) onSnowPuff(TreeX, TreeY, 8);
-                    }
-                    else
-                    {
-                        TreeX = curBounds.Left + TreeWindowOffsetX;
-                        TreeY = curBounds.Top - TreeWindowOffsetY;
-                    }
-                }
-                else
-                {
-                    TreeAttachedWindow = IntPtr.Zero;
-                    TreeY = floorY - 6f;
-                }
-            }
-
-            // 2. Update Gifts Physics
-            if (ShowGifts)
-            {
-                for (int i = Gifts.Count - 1; i >= 0; i--)
-                {
-                    ChristmasGift g = Gifts[i];
-                    if (g.IsGrabbed) continue;
-
-                    if (g.IsFalling)
-                    {
-                        g.Vy += 0.95f;
-                        g.X += g.Vx;
-                        g.Y += g.Vy;
-                        g.Vx *= 0.98f;
-
-                        // Landing on window
-                        if (winMgr != null)
+                        if (t.X < curBounds.Left - 10f || t.X > curBounds.Right + 10f)
                         {
-                            List<WindowInfo> windows = winMgr.ActiveWindows;
-                            for (int w = 0; w < windows.Count; w++)
-                            {
-                                WindowInfo win = windows[w];
-                                Rectangle r = win.Bounds;
-                                if (g.X >= r.Left && g.X <= r.Right &&
-                                    g.Y >= r.Top && (g.Y - g.Vy) <= r.Top + 16f)
-                                {
-                                    g.Y = r.Top;
-                                    g.Vy = 0f;
-                                    g.Vx = 0f;
-                                    g.IsFalling = false;
-                                    g.AttachedWindow = win.Handle;
-                                    g.WindowOffsetX = g.X - r.Left;
-                                    g.WindowOffsetY = r.Top - g.Y;
-                                    if (onSnowPuff != null) onSnowPuff(g.X, g.Y, 5);
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Landing on Taskbar
-                        if (g.IsFalling && g.Y >= floorY - 6f)
-                        {
-                            g.Y = floorY - 6f;
-                            g.Vy = 0f;
-                            g.Vx = 0f;
-                            g.IsFalling = false;
-                            g.AttachedWindow = IntPtr.Zero;
-                            if (onSnowPuff != null) onSnowPuff(g.X, g.Y, 5);
-                        }
-                    }
-                    else if (g.AttachedWindow != IntPtr.Zero && winMgr != null)
-                    {
-                        Rectangle curBounds;
-                        bool hasMoved;
-                        if (winMgr.TryGetWindowCurrentBounds(g.AttachedWindow, out curBounds, out hasMoved))
-                        {
-                            if (g.X < curBounds.Left - 8f || g.X > curBounds.Right + 8f)
-                            {
-                                g.AttachedWindow = IntPtr.Zero;
-                                g.IsFalling = true;
-                                g.Vy = 2.0f;
-                                continue;
-                            }
-                            g.X = curBounds.Left + g.WindowOffsetX;
-                            g.Y = curBounds.Top - g.WindowOffsetY;
+                            t.AttachedWindow = IntPtr.Zero;
+                            t.Y = floorY - 6f;
+                            if (onSnowPuff != null) onSnowPuff(t.X, t.Y, 8);
                         }
                         else
                         {
+                            t.X = curBounds.Left + t.WindowOffsetX;
+                            t.Y = curBounds.Top - t.WindowOffsetY;
+                        }
+                    }
+                    else
+                    {
+                        t.AttachedWindow = IntPtr.Zero;
+                        t.Y = floorY - 6f;
+                    }
+                }
+            }
+
+            // 2. Update Gifts Physics & Window Attachment
+            for (int i = Gifts.Count - 1; i >= 0; i--)
+            {
+                ChristmasGiftItem g = Gifts[i];
+                if (g.IsGrabbed) continue;
+
+                if (g.IsFalling)
+                {
+                    g.Vy += 0.95f;
+                    g.X += g.Vx;
+                    g.Y += g.Vy;
+                    g.Vx *= 0.98f;
+
+                    // Landing on window
+                    if (winMgr != null)
+                    {
+                        List<WindowInfo> windows = winMgr.ActiveWindows;
+                        for (int w = 0; w < windows.Count; w++)
+                        {
+                            WindowInfo win = windows[w];
+                            Rectangle r = win.Bounds;
+                            if (g.X >= r.Left && g.X <= r.Right &&
+                                g.Y >= r.Top && (g.Y - g.Vy) <= r.Top + 16f)
+                            {
+                                g.Y = r.Top;
+                                g.Vy = 0f;
+                                g.Vx = 0f;
+                                g.IsFalling = false;
+                                g.AttachedWindow = win.Handle;
+                                g.WindowOffsetX = g.X - r.Left;
+                                g.WindowOffsetY = r.Top - g.Y;
+                                if (onSnowPuff != null) onSnowPuff(g.X, g.Y, 5);
+                                break;
+                            }
+                        }
+                    }
+
+                    // Landing on Taskbar
+                    if (g.IsFalling && g.Y >= floorY - 6f)
+                    {
+                        g.Y = floorY - 6f;
+                        g.Vy = 0f;
+                        g.Vx = 0f;
+                        g.IsFalling = false;
+                        g.AttachedWindow = IntPtr.Zero;
+                        if (onSnowPuff != null) onSnowPuff(g.X, g.Y, 5);
+                    }
+                }
+                else if (g.AttachedWindow != IntPtr.Zero && winMgr != null)
+                {
+                    Rectangle curBounds;
+                    bool hasMoved;
+                    if (winMgr.TryGetWindowCurrentBounds(g.AttachedWindow, out curBounds, out hasMoved))
+                    {
+                        if (g.X < curBounds.Left - 8f || g.X > curBounds.Right + 8f)
+                        {
                             g.AttachedWindow = IntPtr.Zero;
                             g.IsFalling = true;
+                            g.Vy = 2.0f;
+                            continue;
                         }
+                        g.X = curBounds.Left + g.WindowOffsetX;
+                        g.Y = curBounds.Top - g.WindowOffsetY;
+                    }
+                    else
+                    {
+                        g.AttachedWindow = IntPtr.Zero;
+                        g.IsFalling = true;
                     }
                 }
             }
@@ -582,355 +1168,26 @@ namespace BoWeather
 
         public void Draw(Graphics g, WindowManager winMgr, int screenWidth, int screenHeight, int floorY)
         {
-            // 1. Draw Christmas String Lights
-            if (ShowLights)
+            // 1. Draw String Lights
+            for (int i = 0; i < Lights.Count; i++)
             {
-                DrawChristmasStringLights(g, winMgr, screenWidth, floorY);
+                Lights[i].Draw(g, _animTick, true);
             }
 
-            // 2. Draw Christmas Tree
-            if (ShowTree)
+            // 2. Draw Trees
+            for (int i = 0; i < Trees.Count; i++)
             {
-                DrawChristmasTree(g);
+                Trees[i].Draw(g, _animTick);
             }
 
             // 3. Draw Gifts
-            if (ShowGifts)
+            for (int i = 0; i < Gifts.Count; i++)
             {
-                for (int i = 0; i < Gifts.Count; i++)
-                {
-                    Gifts[i].Draw(g);
-                }
+                Gifts[i].Draw(g);
             }
         }
 
-        private void DrawChristmasTree(Graphics g)
-        {
-            float cx = TreeX;
-            float cy = TreeY;
-            float w = TreeWidth;
-            float h = TreeHeight;
-
-            // Contact shadow
-            float shadowW = w * 0.95f;
-            float shadowH = 14f;
-            using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb(60, 15, 30, 45)))
-            {
-                g.FillEllipse(shadowBrush, cx - shadowW * 0.5f, cy - shadowH * 0.5f, shadowW, shadowH);
-            }
-
-            // 1. Wooden Trunk
-            float trunkW = 18f;
-            float trunkH = 26f;
-            RectangleF trunkRect = new RectangleF(cx - trunkW * 0.5f, cy - trunkH, trunkW, trunkH);
-            using (GraphicsPath tp = VectorIcons.CreateRoundedRect(trunkRect, 3f))
-            using (LinearGradientBrush trunkGrad = new LinearGradientBrush(
-                new PointF(trunkRect.Left, trunkRect.Top),
-                new PointF(trunkRect.Right, trunkRect.Top),
-                Color.FromArgb(255, 120, 74, 42),
-                Color.FromArgb(255, 78, 46, 22)))
-            {
-                g.FillPath(trunkGrad, tp);
-            }
-
-            // 2. Three Cascading Tiers of Pine Foliage
-            // Tier 3 (Bottom):
-            DrawPineTier(g, cx, cy - 20f, w * 0.96f, 44f, 0);
-            // Tier 2 (Middle):
-            DrawPineTier(g, cx, cy - 54f, w * 0.76f, 38f, 1);
-            // Tier 1 (Top):
-            DrawPineTier(g, cx, cy - 84f, w * 0.54f, 36f, 2);
-
-            // 3. Glossy Colorful Baubles
-            PointF[] baublePos = new PointF[]
-            {
-                new PointF(cx - 28f, cy - 32f),
-                new PointF(cx + 26f, cy - 35f),
-                new PointF(cx - 8f,  cy - 40f),
-                new PointF(cx + 36f, cy - 38f),
-                new PointF(cx - 22f, cy - 64f),
-                new PointF(cx + 18f, cy - 66f),
-                new PointF(cx - 4f,  cy - 72f),
-                new PointF(cx + 24f, cy - 70f),
-                new PointF(cx - 10f, cy - 95f),
-                new PointF(cx + 11f, cy - 97f)
-            };
-
-            Color[] baubleColors = new Color[]
-            {
-                Color.FromArgb(220, 38, 38),   // Crimson Red
-                Color.FromArgb(250, 204, 21),  // Shiny Gold
-                Color.FromArgb(14, 165, 233),  // Sky Blue
-                Color.FromArgb(236, 72, 153),  // Pink
-                Color.FromArgb(250, 204, 21),  // Shiny Gold
-                Color.FromArgb(220, 38, 38),   // Crimson Red
-                Color.FromArgb(224, 242, 254), // Ice White
-                Color.FromArgb(236, 72, 153),  // Pink
-                Color.FromArgb(220, 38, 38),   // Crimson Red
-                Color.FromArgb(250, 204, 21)   // Shiny Gold
-            };
-
-            for (int b = 0; b < baublePos.Length; b++)
-            {
-                float bx = baublePos[b].X;
-                float by = baublePos[b].Y;
-                float br = 5.2f;
-                Color bCol = baubleColors[b % baubleColors.Length];
-
-                // Cap hanging wire
-                using (Pen capPen = new Pen(Color.FromArgb(120, 60, 40, 10), 1f))
-                {
-                    g.DrawLine(capPen, bx, by - br - 3f, bx, by - br);
-                }
-
-                // Bauble 3D Sphere
-                using (GraphicsPath bp = new GraphicsPath())
-                {
-                    bp.AddEllipse(bx - br, by - br, br * 2f, br * 2f);
-                    Color darkB = Color.FromArgb(
-                        (int)(bCol.R * 0.65f),
-                        (int)(bCol.G * 0.65f),
-                        (int)(bCol.B * 0.65f));
-
-                    using (LinearGradientBrush bGrad = new LinearGradientBrush(
-                        new PointF(bx - br * 0.5f, by - br * 0.5f),
-                        new PointF(bx + br, by + br),
-                        bCol, darkB))
-                    {
-                        g.FillPath(bGrad, bp);
-                    }
-                }
-
-                // Specular Glint
-                using (SolidBrush glint = new SolidBrush(Color.FromArgb(210, 255, 255, 255)))
-                {
-                    g.FillEllipse(glint, bx - br * 0.45f, by - br * 0.45f, br * 0.65f, br * 0.65f);
-                }
-            }
-
-            // 4. Twinkling Tree Lights
-            PointF[] lightPos = new PointF[]
-            {
-                new PointF(cx - 16f, cy - 30f),
-                new PointF(cx + 8f,  cy - 34f),
-                new PointF(cx - 36f, cy - 28f),
-                new PointF(cx + 34f, cy - 29f),
-                new PointF(cx - 12f, cy - 60f),
-                new PointF(cx + 8f,  cy - 62f),
-                new PointF(cx - 24f, cy - 58f),
-                new PointF(cx + 25f, cy - 59f),
-                new PointF(cx - 4f,  cy - 88f),
-                new PointF(cx + 5f,  cy - 92f),
-                new PointF(cx - 14f, cy - 87f),
-                new PointF(cx + 15f, cy - 89f)
-            };
-
-            for (int l = 0; l < lightPos.Length; l++)
-            {
-                float lx = lightPos[l].X;
-                float ly = lightPos[l].Y;
-                float pulse = (float)(0.60 + 0.40 * Math.Sin(_animTick * 3.5f + l * 0.85f));
-                int alpha = (int)(255 * pulse);
-
-                Color lCol = (l % 3 == 0) ? Color.FromArgb(255, 235, 59) :
-                             (l % 3 == 1) ? Color.FromArgb(255, 255, 255) :
-                                            Color.FromArgb(56, 189, 248);
-
-                // Glow aura
-                using (SolidBrush glow = new SolidBrush(Color.FromArgb((int)(75 * pulse), lCol)))
-                {
-                    g.FillEllipse(glow, lx - 5f, ly - 5f, 10f, 10f);
-                }
-                // Center point
-                using (SolidBrush core = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
-                {
-                    g.FillEllipse(core, lx - 1.8f, ly - 1.8f, 3.6f, 3.6f);
-                }
-            }
-
-            // 5. Radiant Golden Star ⭐ on Tree Peak
-            float starCx = cx;
-            float starCy = cy - 120f;
-            float starPulse = (float)(0.80 + 0.20 * Math.Sin(_animTick * 2.8f));
-
-            // Star outer glow halo
-            using (SolidBrush starGlow = new SolidBrush(Color.FromArgb((int)(65 * starPulse), 255, 215, 0)))
-            {
-                g.FillEllipse(starGlow, starCx - 22f, starCy - 22f, 44f, 44f);
-            }
-
-            // Star 5-pointed polygon
-            DrawStarPolygon(g, starCx, starCy, 14f, 6.2f, Color.FromArgb(255, 215, 0), Color.FromArgb(245, 158, 11));
-        }
-
-        private void DrawPineTier(Graphics g, float cx, float cy, float tierW, float tierH, int tierIndex)
-        {
-            float halfW = tierW * 0.5f;
-            float topY = cy - tierH;
-            float botY = cy;
-
-            // Scalloped pine foliage polygon
-            PointF[] pts = new PointF[]
-            {
-                new PointF(cx, topY),
-                new PointF(cx + halfW * 0.35f, topY + tierH * 0.35f),
-                new PointF(cx + halfW * 0.28f, topY + tierH * 0.40f),
-                new PointF(cx + halfW * 0.68f, topY + tierH * 0.72f),
-                new PointF(cx + halfW * 0.58f, topY + tierH * 0.76f),
-                new PointF(cx + halfW, botY),
-                new PointF(cx + halfW * 0.65f, botY - 5f),
-                new PointF(cx + halfW * 0.35f, botY - 3f),
-                new PointF(cx, botY - 6f),
-                new PointF(cx - halfW * 0.35f, botY - 3f),
-                new PointF(cx - halfW * 0.65f, botY - 5f),
-                new PointF(cx - halfW, botY),
-                new PointF(cx - halfW * 0.58f, topY + tierH * 0.76f),
-                new PointF(cx - halfW * 0.68f, topY + tierH * 0.72f),
-                new PointF(cx - halfW * 0.28f, topY + tierH * 0.40f),
-                new PointF(cx - halfW * 0.35f, topY + tierH * 0.35f)
-            };
-
-            using (GraphicsPath gp = new GraphicsPath())
-            {
-                gp.AddPolygon(pts);
-
-                Color cTop = Color.FromArgb(255, 46, 138, 70);
-                Color cBot = Color.FromArgb(255, 20, 76, 38);
-
-                using (LinearGradientBrush grad = new LinearGradientBrush(
-                    new PointF(cx, topY),
-                    new PointF(cx, botY),
-                    cTop, cBot))
-                {
-                    g.FillPath(grad, gp);
-                }
-
-                using (Pen rimPen = new Pen(Color.FromArgb(90, 15, 60, 30), 1f))
-                {
-                    g.DrawPath(rimPen, gp);
-                }
-            }
-
-            // Fluffy white snow caps on branch shoulders
-            using (SolidBrush snowBrush = new SolidBrush(Color.FromArgb(235, 255, 255, 255)))
-            {
-                // Left shoulder snow
-                g.FillEllipse(snowBrush, cx - halfW * 0.72f, topY + tierH * 0.68f - 3f, halfW * 0.52f, 6.5f);
-                // Right shoulder snow
-                g.FillEllipse(snowBrush, cx + halfW * 0.20f, topY + tierH * 0.68f - 3f, halfW * 0.52f, 6.5f);
-            }
-        }
-
-        private void DrawChristmasStringLights(Graphics g, WindowManager winMgr, int screenWidth, int floorY)
-        {
-            Color[] bulbPalette = new Color[]
-            {
-                Color.FromArgb(239, 68, 68),   // Red
-                Color.FromArgb(245, 158, 11),  // Amber Gold
-                Color.FromArgb(16, 185, 129),  // Emerald Green
-                Color.FromArgb(6, 182, 212),   // Cyan Blue
-                Color.FromArgb(236, 72, 153),  // Pink
-                Color.FromArgb(254, 240, 138)  // Warm White
-            };
-
-            // 1. Draw lights on active floating windows
-            if (winMgr != null)
-            {
-                List<WindowInfo> windows = winMgr.ActiveWindows;
-                for (int w = 0; w < windows.Count; w++)
-                {
-                    WindowInfo win = windows[w];
-                    Rectangle r = win.Bounds;
-                    if (r.Width < 140 || r.Top < -20 || r.Top > floorY + 50) continue;
-
-                    DrawLightsSwag(g, r.Left + 8f, r.Top + 6f, r.Right - 8f, r.Top + 6f, 18f, bulbPalette, true);
-                }
-            }
-
-            // 2. Draw lights along Taskbar snow
-            int segCount = Math.Max(4, screenWidth / 240);
-            float segW = (float)screenWidth / segCount;
-            for (int s = 0; s < segCount; s++)
-            {
-                float x1 = s * segW;
-                float x2 = (s + 1) * segW;
-                float yBase = floorY - 6f;
-                DrawLightsSwag(g, x1, yBase, x2, yBase, 16f, bulbPalette, false);
-            }
-        }
-
-        private void DrawLightsSwag(Graphics g, float x1, float y1, float x2, float y2, float sagDepth, Color[] palette, bool isWindow)
-        {
-            float midX = (x1 + x2) * 0.5f;
-            float midY = (y1 + y2) * 0.5f + sagDepth;
-
-            // Draw Wire
-            using (GraphicsPath wirePath = new GraphicsPath())
-            {
-                wirePath.AddBezier(
-                    new PointF(x1, y1),
-                    new PointF(x1 + (midX - x1) * 0.5f, midY),
-                    new PointF(midX + (x2 - midX) * 0.5f, midY),
-                    new PointF(x2, y2));
-
-                using (Pen wirePen = new Pen(Color.FromArgb(180, 30, 60, 40), 1.6f))
-                {
-                    g.DrawPath(wirePen, wirePath);
-                }
-            }
-
-            // Bulbs along curve
-            int bulbCount = Math.Max(3, (int)((x2 - x1) / 32f));
-            for (int b = 1; b < bulbCount; b++)
-            {
-                float t = (float)b / bulbCount;
-                // Bezier interpolation
-                float u = 1f - t;
-                float bx = u * u * u * x1 + 3f * u * u * t * (x1 + (midX - x1) * 0.5f) + 3f * u * t * t * (midX + (x2 - midX) * 0.5f) + t * t * t * x2;
-                float by = u * u * u * y1 + 3f * u * u * t * midY + 3f * u * t * t * midY + t * t * t * y2;
-
-                Color bulbCol = palette[(b + (int)(x1 * 0.1f)) % palette.Length];
-                float pulse = (float)(0.70 + 0.30 * Math.Sin(_animTick * 3.2f + b * 1.25f + x1 * 0.05f));
-                float r = 4.8f;
-
-                // Dark socket cap
-                using (SolidBrush capBrush = new SolidBrush(Color.FromArgb(200, 35, 45, 40)))
-                {
-                    g.FillRectangle(capBrush, bx - 1.5f, by - 2.5f, 3f, 3f);
-                }
-
-                // Bulb glow halo
-                using (SolidBrush halo = new SolidBrush(Color.FromArgb((int)(60 * pulse), bulbCol)))
-                {
-                    g.FillEllipse(halo, bx - r * 1.6f, by - r * 0.5f, r * 3.2f, r * 3.2f);
-                }
-
-                // Teardrop glass bulb
-                using (SolidBrush bulbBrush = new SolidBrush(Color.FromArgb((int)(240 * pulse), bulbCol)))
-                {
-                    g.FillEllipse(bulbBrush, bx - r, by, r * 2f, r * 2.3f);
-                }
-
-                // Center bright sparkle
-                using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(220 * pulse), 255, 255, 255)))
-                {
-                    g.FillEllipse(glint, bx - r * 0.4f, by + r * 0.35f, r * 0.7f, r * 0.7f);
-                }
-            }
-
-            // Star in the middle of loop
-            if (ShowStarLights)
-            {
-                float starPulse = (float)(0.75 + 0.25 * Math.Sin(_animTick * 2.5f + x1 * 0.02f));
-                using (SolidBrush starGlow = new SolidBrush(Color.FromArgb((int)(55 * starPulse), 255, 215, 0)))
-                {
-                    g.FillEllipse(starGlow, midX - 16f, midY + 6f - 16f, 32f, 32f);
-                }
-                DrawStarPolygon(g, midX, midY + 6f, 8.5f, 3.8f, Color.FromArgb(255, 215, 0), Color.FromArgb(245, 158, 11));
-            }
-        }
-
-        private static void DrawStarPolygon(Graphics g, float cx, float cy, float outerR, float innerR, Color cTop, Color cBot)
+        public static void DrawStarPolygon(Graphics g, float cx, float cy, float outerR, float innerR, Color cTop, Color cBot)
         {
             PointF[] pts = new PointF[10];
             double angleStep = Math.PI / 5.0;
@@ -960,18 +1217,65 @@ namespace BoWeather
             }
         }
 
+        public static void DrawDeleteButton(Graphics g, float cx, float cy, bool isHover)
+        {
+            float r = isHover ? 11f : 9f;
+            Color bg = isHover ? Color.FromArgb(239, 68, 68) : Color.FromArgb(200, 220, 38, 38);
+
+            // Halo
+            if (isHover)
+            {
+                using (SolidBrush halo = new SolidBrush(Color.FromArgb(80, 239, 68, 68)))
+                {
+                    g.FillEllipse(halo, cx - r * 1.4f, cy - r * 1.4f, r * 2.8f, r * 2.8f);
+                }
+            }
+
+            // Badge circle
+            using (SolidBrush bBrush = new SolidBrush(bg))
+            {
+                g.FillEllipse(bBrush, cx - r, cy - r, r * 2f, r * 2f);
+            }
+            using (Pen borderPen = new Pen(Color.White, 1.2f))
+            {
+                g.DrawEllipse(borderPen, cx - r, cy - r, r * 2f, r * 2f);
+            }
+
+            // White 'X' symbol
+            float xSize = r * 0.45f;
+            using (Pen xPen = new Pen(Color.White, 1.8f))
+            {
+                xPen.StartCap = LineCap.Round;
+                xPen.EndCap = LineCap.Round;
+                g.DrawLine(xPen, cx - xSize, cy - xSize, cx + xSize, cy + xSize);
+                g.DrawLine(xPen, cx + xSize, cy - xSize, cx - xSize, cy + xSize);
+            }
+        }
+
         public void SaveSettings()
         {
             try
             {
                 List<string> lines = new List<string>();
-                lines.Add("tree=" + ShowTree.ToString().ToLower());
-                lines.Add("gifts=" + ShowGifts.ToString().ToLower());
-                lines.Add("lights=" + ShowLights.ToString().ToLower());
-                lines.Add("stars=" + ShowStarLights.ToString().ToLower());
                 lines.Add("santahat=" + ShowSantaHat.ToString().ToLower());
-                lines.Add("treex=" + TreeX.ToString("F1"));
-                lines.Add("treey=" + TreeY.ToString("F1"));
+
+                foreach (ChristmasTreeItem t in Trees)
+                {
+                    lines.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "tree={0:F1},{1:F1}", t.X, t.Y));
+                }
+
+                foreach (ChristmasGiftItem g in Gifts)
+                {
+                    lines.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "gift={0:F1},{1:F1},#{2:X2}{3:X2}{4:X2},#{5:X2}{6:X2}{7:X2}",
+                        g.X, g.Y, g.BoxColor.R, g.BoxColor.G, g.BoxColor.B, g.RibbonColor.R, g.RibbonColor.G, g.RibbonColor.B));
+                }
+
+                foreach (ChristmasLightsItem l in Lights)
+                {
+                    lines.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "lights={0:F1},{1:F1},{2:F1},{3:F1}",
+                        l.X1, l.Y1, l.X2, l.Y2));
+                }
+
                 File.WriteAllLines(_settingsPath, lines.ToArray());
             }
             catch { }
@@ -981,31 +1285,76 @@ namespace BoWeather
         {
             try
             {
+                Trees.Clear();
+                Gifts.Clear();
+                Lights.Clear();
+
                 if (!File.Exists(_settingsPath)) return;
                 string[] lines = File.ReadAllLines(_settingsPath);
-                foreach (string l in lines)
+                foreach (string rawLine in lines)
                 {
-                    if (string.IsNullOrEmpty(l)) continue;
-                    string[] parts = l.Split('=');
-                    if (parts.Length != 2) continue;
-                    string k = parts[0].Trim().ToLower();
-                    string v = parts[1].Trim().ToLower();
+                    if (string.IsNullOrEmpty(rawLine)) continue;
+                    string line = rawLine.Trim();
+                    int eq = line.IndexOf('=');
+                    if (eq <= 0) continue;
 
-                    switch (k)
+                    string key = line.Substring(0, eq).Trim().ToLower();
+                    string val = line.Substring(eq + 1).Trim();
+
+                    if (key == "santahat")
                     {
-                        case "tree": ShowTree = (v == "true"); break;
-                        case "gifts": ShowGifts = (v == "true"); break;
-                        case "lights": ShowLights = (v == "true"); break;
-                        case "stars": ShowStarLights = (v == "true"); break;
-                        case "santahat": ShowSantaHat = (v == "true"); break;
-                        case "treex":
-                            float tx;
-                            if (float.TryParse(v, out tx) && tx > 0) TreeX = tx;
-                            break;
-                        case "treey":
-                            float ty;
-                            if (float.TryParse(v, out ty) && ty > 0) TreeY = ty;
-                            break;
+                        ShowSantaHat = (val.ToLower() == "true");
+                    }
+                    else if (key == "tree")
+                    {
+                        string[] parts = val.Split(',');
+                        if (parts.Length >= 2)
+                        {
+                            float tx, ty;
+                            if (float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out tx) &&
+                                float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ty))
+                            {
+                                Trees.Add(new ChristmasTreeItem(tx, ty));
+                            }
+                        }
+                    }
+                    else if (key == "gift")
+                    {
+                        string[] parts = val.Split(',');
+                        if (parts.Length >= 2)
+                        {
+                            float gx, gy;
+                            if (float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out gx) &&
+                                float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out gy))
+                            {
+                                Color bCol = Color.FromArgb(220, 38, 38);
+                                Color rCol = Color.FromArgb(255, 215, 0);
+                                if (parts.Length >= 3)
+                                {
+                                    try { bCol = ColorTranslator.FromHtml(parts[2]); } catch { }
+                                }
+                                if (parts.Length >= 4)
+                                {
+                                    try { rCol = ColorTranslator.FromHtml(parts[3]); } catch { }
+                                }
+                                Gifts.Add(new ChristmasGiftItem(gx, gy, bCol, rCol));
+                            }
+                        }
+                    }
+                    else if (key == "lights")
+                    {
+                        string[] parts = val.Split(',');
+                        if (parts.Length >= 4)
+                        {
+                            float x1, y1, x2, y2;
+                            if (float.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out x1) &&
+                                float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out y1) &&
+                                float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out x2) &&
+                                float.TryParse(parts[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out y2))
+                            {
+                                Lights.Add(new ChristmasLightsItem(x1, y1, x2, y2));
+                            }
+                        }
                     }
                 }
             }
