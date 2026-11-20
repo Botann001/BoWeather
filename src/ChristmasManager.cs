@@ -816,6 +816,458 @@ namespace BoWeather
         }
     }
 
+    public class ChristmasOrnamentItem
+    {
+        public string Type;
+        public float X;
+        public float Y;
+        public float Width = 38f;
+        public float Height = 42f;
+        public bool IsGrabbed = false;
+        public float GrabOffsetX = 0f;
+        public float GrabOffsetY = 0f;
+        public IntPtr AttachedWindow = IntPtr.Zero;
+        public float WindowOffsetX = 0f;
+        public float WindowOffsetY = 0f;
+        public bool IsHovered = false;
+        public bool HoverDelete = false;
+
+        public ChristmasOrnamentItem(string type, float x, float y)
+        {
+            Type = type;
+            X = x;
+            Y = y;
+            if (type == "wreath" || type == "snowglobe") { Width = 44f; Height = 44f; }
+            else if (type == "boat") { Width = 48f; Height = 44f; }
+            else if (type == "candycane") { Width = 32f; Height = 48f; }
+            else if (type == "stocking") { Width = 36f; Height = 46f; }
+            else if (type == "candle") { Width = 32f; Height = 48f; }
+            else if (type == "cocoa") { Width = 42f; Height = 40f; }
+            else if (type == "bells") { Width = 42f; Height = 42f; }
+            else if (type == "gingerbread") { Width = 38f; Height = 46f; }
+            else if (type == "holly") { Width = 42f; Height = 36f; }
+            else if (type == "santahat") { Width = 42f; Height = 38f; }
+            else { Width = 38f; Height = 42f; }
+        }
+
+        public RectangleF GetBounds()
+        {
+            return new RectangleF(X - Width * 0.5f, Y - Height, Width, Height);
+        }
+
+        public RectangleF GetDeleteButtonBounds()
+        {
+            return new RectangleF(X + Width * 0.5f - 8f, Y - Height - 6f, 18f, 18f);
+        }
+
+        public void Draw(Graphics g, float animTick)
+        {
+            float cx = X;
+            float cy = Y - Height * 0.5f;
+            float w = Width;
+            float h = Height;
+
+            // 0. Soft contact shadow on ground / window
+            float shadowW = w * 0.88f;
+            float shadowH = 10f;
+            using (SolidBrush sb = new SolidBrush(Color.FromArgb(55, 15, 25, 40)))
+            {
+                g.FillEllipse(sb, cx - shadowW * 0.5f, Y - shadowH * 0.55f, shadowW, shadowH);
+            }
+
+            // 1. Draw Ornament Graphic
+            DrawOrnamentGraphic(g, Type, cx, cy, w, h, animTick);
+
+            // 2. Delete Button (X) on hover
+            if (IsHovered || HoverDelete)
+            {
+                RectangleF delRect = GetDeleteButtonBounds();
+                ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, HoverDelete);
+            }
+        }
+
+        private static void DrawOrnamentGraphic(Graphics g, string type, float cx, float cy, float w, float h, float animTick)
+        {
+            float r = Math.Min(w, h) * 0.5f;
+            switch (type)
+            {
+                case "candle":
+                    // Saucer base
+                    using (SolidBrush saucer = new SolidBrush(Color.FromArgb(255, 230, 180, 50)))
+                    {
+                        g.FillEllipse(saucer, cx - 12f, cy + 10f, 24f, 8f);
+                    }
+                    using (Pen saucerRim = new Pen(Color.FromArgb(180, 160, 110, 20), 1f))
+                    {
+                        g.DrawEllipse(saucerRim, cx - 12f, cy + 10f, 24f, 8f);
+                    }
+                    // Red candle pillar
+                    using (LinearGradientBrush cb = new LinearGradientBrush(
+                        new PointF(cx - 6f, cy - 8f), new PointF(cx + 6f, cy - 8f),
+                        Color.FromArgb(255, 235, 50, 60), Color.FromArgb(255, 160, 20, 30)))
+                    {
+                        g.FillRectangle(cb, cx - 6f, cy - 8f, 12f, 19f);
+                    }
+                    // Wax drips
+                    using (SolidBrush drip = new SolidBrush(Color.FromArgb(245, 255, 245, 230)))
+                    {
+                        g.FillEllipse(drip, cx - 6f, cy - 10f, 12f, 5f);
+                        g.FillEllipse(drip, cx - 4f, cy - 8f, 3.5f, 7f);
+                    }
+                    // Wick
+                    using (Pen wick = new Pen(Color.FromArgb(50, 30, 20), 1.2f))
+                    {
+                        g.DrawLine(wick, cx, cy - 9f, cx, cy - 12f);
+                    }
+                    // Pulsing golden flame & halo
+                    float flamePulse = (float)(0.80 + 0.20 * Math.Sin(animTick * 4.2f));
+                    using (SolidBrush glow = new SolidBrush(Color.FromArgb((int)(90 * flamePulse), 255, 215, 0)))
+                    {
+                        g.FillEllipse(glow, cx - 11f, cy - 24f, 22f, 22f);
+                    }
+                    using (SolidBrush flame = new SolidBrush(Color.FromArgb(255, 255, 215, 20)))
+                    {
+                        g.FillEllipse(flame, cx - 4.5f, cy - 22f, 9f, 13f);
+                    }
+                    using (SolidBrush core = new SolidBrush(Color.FromArgb(255, 255, 255, 240)))
+                    {
+                        g.FillEllipse(core, cx - 2f, cy - 18f, 4f, 7f);
+                    }
+                    break;
+
+                case "redbauble":
+                case "goldbauble":
+                    bool isRed = (type == "redbauble");
+                    Color ballColor = isRed ? Color.FromArgb(235, 35, 50) : Color.FromArgb(255, 195, 20);
+                    Color darkColor = isRed ? Color.FromArgb(100, 10, 20) : Color.FromArgb(140, 95, 10);
+
+                    // Hanger cap
+                    using (SolidBrush cap = new SolidBrush(Color.FromArgb(255, 250, 212, 85)))
+                    {
+                        g.FillRectangle(cap, cx - 4f, cy - r * 0.82f - 4f, 8f, 4.5f);
+                    }
+                    using (Pen capWire = new Pen(Color.FromArgb(200, 160, 120, 25), 1.1f))
+                    {
+                        g.DrawArc(capWire, cx - 3f, cy - r * 0.82f - 7.5f, 6f, 5f, 180, 180);
+                    }
+
+                    // 3D Glass Sphere
+                    float br = r * 0.82f;
+                    using (GraphicsPath bp = new GraphicsPath())
+                    {
+                        bp.AddEllipse(cx - br, cy - br + 2f, br * 2f, br * 2f);
+                        using (PathGradientBrush pgb = new PathGradientBrush(bp))
+                        {
+                            pgb.CenterPoint = new PointF(cx - br * 0.35f, cy - br * 0.35f + 2f);
+                            pgb.CenterColor = Color.FromArgb(255,
+                                Math.Min(255, (int)(ballColor.R * 1.55f)),
+                                Math.Min(255, (int)(ballColor.G * 1.55f)),
+                                Math.Min(255, (int)(ballColor.B * 1.55f)));
+                            pgb.SurroundColors = new Color[] { darkColor };
+                            g.FillPath(pgb, bp);
+                        }
+                    }
+                    // Specular glint
+                    using (SolidBrush glint = new SolidBrush(Color.FromArgb(240, 255, 255, 255)))
+                    {
+                        g.FillEllipse(glint, cx - br * 0.58f, cy - br * 0.58f + 2f, br * 0.62f, br * 0.44f);
+                    }
+                    using (SolidBrush bounce = new SolidBrush(Color.FromArgb(50, 255, 255, 255)))
+                    {
+                        g.FillEllipse(bounce, cx + br * 0.20f, cy + br * 0.20f + 2f, br * 0.45f, br * 0.45f);
+                    }
+                    break;
+
+                case "wreath":
+                    float wr = r * 0.85f;
+                    using (Pen wp = new Pen(Color.FromArgb(255, 32, 145, 60), 6f))
+                    {
+                        g.DrawEllipse(wp, cx - wr, cy - wr - 1f, wr * 2f, wr * 2f);
+                    }
+                    using (Pen wp2 = new Pen(Color.FromArgb(255, 62, 198, 92), 2.5f))
+                    {
+                        g.DrawEllipse(wp2, cx - wr, cy - wr - 1f, wr * 2f, wr * 2f);
+                    }
+                    // Red berries
+                    using (SolidBrush berry = new SolidBrush(Color.FromArgb(240, 35, 50)))
+                    {
+                        g.FillEllipse(berry, cx - wr * 0.7f, cy - wr * 0.7f - 1f, 5f, 5f);
+                        g.FillEllipse(berry, cx + wr * 0.6f, cy - wr * 0.7f - 1f, 5f, 5f);
+                        g.FillEllipse(berry, cx - wr * 0.85f, cy + 2f, 5f, 5f);
+                        g.FillEllipse(berry, cx + wr * 0.75f, cy + 2f, 5f, 5f);
+                    }
+                    // Red bow at bottom
+                    using (SolidBrush bow = new SolidBrush(Color.FromArgb(235, 30, 48)))
+                    {
+                        g.FillEllipse(bow, cx - 8f, cy + wr - 5f, 7f, 6f);
+                        g.FillEllipse(bow, cx + 1f, cy + wr - 5f, 7f, 6f);
+                        g.FillEllipse(bow, cx - 3f, cy + wr - 4f, 6f, 6f);
+                        PointF[] ribL = new PointF[] { new PointF(cx - 2f, cy + wr), new PointF(cx - 7f, cy + wr + 8f), new PointF(cx - 4f, cy + wr + 7f) };
+                        PointF[] ribR = new PointF[] { new PointF(cx + 2f, cy + wr), new PointF(cx + 7f, cy + wr + 8f), new PointF(cx + 4f, cy + wr + 7f) };
+                        g.FillPolygon(bow, ribL);
+                        g.FillPolygon(bow, ribR);
+                    }
+                    break;
+
+                case "stocking":
+                    using (SolidBrush sock = new SolidBrush(Color.FromArgb(235, 35, 50)))
+                    {
+                        g.FillRectangle(sock, cx - 7f, cy - 14f, 13f, 20f);
+                        g.FillEllipse(sock, cx - 7f, cy - 3f, 21f, 16f);
+                    }
+                    // Green heel and toe
+                    using (SolidBrush patch = new SolidBrush(Color.FromArgb(34, 160, 68)))
+                    {
+                        g.FillEllipse(patch, cx - 8f, cy + 2f, 8f, 9f);
+                        g.FillEllipse(patch, cx + 5f, cy + 2f, 8f, 9f);
+                    }
+                    // Fluffy white cuff
+                    using (SolidBrush cuff = new SolidBrush(Color.White))
+                    {
+                        g.FillRectangle(cuff, cx - 9f, cy - 17f, 17f, 7f);
+                    }
+                    // Gold loop
+                    using (Pen loopPen = new Pen(Color.FromArgb(255, 215, 0), 1.2f))
+                    {
+                        g.DrawArc(loopPen, cx - 11f, cy - 20f, 6f, 6f, 180, 180);
+                    }
+                    break;
+
+                case "candycane":
+                    using (Pen canePen = new Pen(Color.FromArgb(235, 35, 50), 6f))
+                    {
+                        canePen.StartCap = LineCap.Round;
+                        canePen.EndCap = LineCap.Round;
+                        GraphicsPath cp = new GraphicsPath();
+                        cp.AddArc(cx - 5f, cy - 16f, 14f, 14f, 180, 180);
+                        cp.AddLine(cx - 5f, cy - 9f, cx - 5f, cy + 16f);
+                        g.DrawPath(canePen, cp);
+                    }
+                    // White spiral stripes
+                    using (Pen stripePen = new Pen(Color.White, 2.2f))
+                    {
+                        for (int i = 0; i < 5; i++)
+                        {
+                            float sy = cy - 6f + i * 5f;
+                            g.DrawLine(stripePen, cx - 8f, sy + 1.5f, cx - 2f, sy - 1.5f);
+                        }
+                    }
+                    // Green ribbon accent
+                    using (SolidBrush greenRib = new SolidBrush(Color.FromArgb(34, 160, 68)))
+                    {
+                        g.FillEllipse(greenRib, cx - 9f, cy - 7f, 8f, 5f);
+                    }
+                    break;
+
+                case "bells":
+                    // Twin golden bells
+                    using (LinearGradientBrush bGrad = new LinearGradientBrush(
+                        new PointF(cx - 10f, cy - 8f), new PointF(cx + 10f, cy + 10f),
+                        Color.FromArgb(255, 255, 230, 80), Color.FromArgb(255, 210, 140, 15)))
+                    {
+                        // Left bell
+                        GraphicsPath b1 = new GraphicsPath();
+                        b1.AddEllipse(cx - 13f, cy - 5f, 12f, 14f);
+                        g.FillPath(bGrad, b1);
+                        // Right bell
+                        GraphicsPath b2 = new GraphicsPath();
+                        b2.AddEllipse(cx + 1f, cy - 5f, 12f, 14f);
+                        g.FillPath(bGrad, b2);
+                    }
+                    // Clappers
+                    using (SolidBrush clap = new SolidBrush(Color.FromArgb(245, 175, 20)))
+                    {
+                        g.FillEllipse(clap, cx - 9f, cy + 6f, 5f, 5f);
+                        g.FillEllipse(clap, cx + 4f, cy + 6f, 5f, 5f);
+                    }
+                    // Red satin bow
+                    using (SolidBrush bow = new SolidBrush(Color.FromArgb(235, 35, 50)))
+                    {
+                        g.FillEllipse(bow, cx - 6f, cy - 10f, 12f, 7f);
+                    }
+                    break;
+
+                case "gingerbread":
+                    using (SolidBrush cookie = new SolidBrush(Color.FromArgb(205, 125, 55)))
+                    {
+                        g.FillEllipse(cookie, cx - 6f, cy - 16f, 12f, 12f); // head
+                        g.FillRectangle(cookie, cx - 5f, cy - 5f, 10f, 15f); // body
+                        g.FillRectangle(cookie, cx - 13f, cy - 3f, 26f, 6f); // arms
+                        g.FillRectangle(cookie, cx - 7f, cy + 8f, 5f, 9f); // left leg
+                        g.FillRectangle(cookie, cx + 2f, cy + 8f, 5f, 9f); // right leg
+                    }
+                    // White icing details
+                    using (Pen icing = new Pen(Color.White, 1.2f))
+                    {
+                        g.DrawArc(icing, cx - 3.5f, cy - 12f, 7f, 5f, 20, 140); // smile
+                        g.DrawLine(icing, cx - 12f, cy - 1f, cx - 12f, cy + 2f);
+                        g.DrawLine(icing, cx + 12f, cy - 1f, cx + 12f, cy + 2f);
+                        g.DrawLine(icing, cx - 6f, cy + 15f, cx - 3f, cy + 15f);
+                        g.DrawLine(icing, cx + 3f, cy + 15f, cx + 6f, cy + 15f);
+                    }
+                    using (SolidBrush btn = new SolidBrush(Color.FromArgb(240, 35, 50)))
+                    {
+                        g.FillEllipse(btn, cx - 1.5f, cy - 2f, 3f, 3f);
+                        g.FillEllipse(btn, cx - 1.5f, cy + 3f, 3f, 3f);
+                    }
+                    break;
+
+                case "holly":
+                    using (SolidBrush leaf = new SolidBrush(Color.FromArgb(32, 145, 60)))
+                    {
+                        g.FillEllipse(leaf, cx - 15f, cy - 9f, 15f, 12f);
+                        g.FillEllipse(leaf, cx, cy - 9f, 15f, 12f);
+                        g.FillEllipse(leaf, cx - 8f, cy + 1f, 16f, 12f);
+                    }
+                    using (Pen vein = new Pen(Color.FromArgb(75, 210, 105), 1f))
+                    {
+                        g.DrawLine(vein, cx - 12f, cy - 3f, cx - 3f, cy);
+                        g.DrawLine(vein, cx + 12f, cy - 3f, cx + 3f, cy);
+                    }
+                    // 3 Red berries
+                    using (SolidBrush berry = new SolidBrush(Color.FromArgb(235, 35, 50)))
+                    {
+                        g.FillEllipse(berry, cx - 5.5f, cy - 3f, 6.5f, 6.5f);
+                        g.FillEllipse(berry, cx + 0.5f, cy - 3f, 6.5f, 6.5f);
+                        g.FillEllipse(berry, cx - 2.5f, cy + 2.5f, 6.5f, 6.5f);
+                    }
+                    using (SolidBrush shine = new SolidBrush(Color.White))
+                    {
+                        g.FillEllipse(shine, cx - 4f, cy - 2f, 2f, 2f);
+                        g.FillEllipse(shine, cx + 2f, cy - 2f, 2f, 2f);
+                    }
+                    break;
+
+                case "snowglobe":
+                    // Wooden pedestal
+                    using (SolidBrush baseB = new SolidBrush(Color.FromArgb(160, 95, 45)))
+                    {
+                        g.FillRectangle(baseB, cx - 12f, cy + 8f, 24f, 8f);
+                    }
+                    using (Pen baseRim = new Pen(Color.FromArgb(105, 55, 20), 1f))
+                    {
+                        g.DrawRectangle(baseRim, cx - 12f, cy + 8f, 24f, 8f);
+                    }
+                    // Glass dome
+                    using (SolidBrush glass = new SolidBrush(Color.FromArgb(160, 205, 235, 255)))
+                    {
+                        g.FillEllipse(glass, cx - 13f, cy - 13f, 26f, 26f);
+                    }
+                    // Mini pine tree inside
+                    using (SolidBrush tree = new SolidBrush(Color.FromArgb(32, 145, 60)))
+                    {
+                        PointF[] mpts = new PointF[] { new PointF(cx, cy - 7f), new PointF(cx + 6f, cy + 4f), new PointF(cx - 6f, cy + 4f) };
+                        g.FillPolygon(tree, mpts);
+                    }
+                    // Falling snow flakes
+                    using (SolidBrush flake = new SolidBrush(Color.White))
+                    {
+                        g.FillEllipse(flake, cx - 7f, cy - 6f, 2.5f, 2.5f);
+                        g.FillEllipse(flake, cx + 6f, cy - 4f, 2f, 2f);
+                        g.FillEllipse(flake, cx - 4f, cy + 1f, 2f, 2f);
+                        g.FillEllipse(flake, cx + 4f, cy + 2f, 2.5f, 2.5f);
+                        // Snow floor
+                        g.FillEllipse(flake, cx - 10f, cy + 4f, 20f, 6f);
+                    }
+                    // Glass shine reflection
+                    using (Pen gPen = new Pen(Color.FromArgb(180, 255, 255, 255), 1.5f))
+                    {
+                        g.DrawArc(gPen, cx - 11f, cy - 11f, 22f, 22f, 200, 60);
+                    }
+                    break;
+
+                case "cocoa":
+                    // Red Mug
+                    using (SolidBrush mug = new SolidBrush(Color.FromArgb(220, 38, 38)))
+                    {
+                        g.FillRectangle(mug, cx - 10f, cy - 5f, 20f, 19f);
+                    }
+                    using (Pen hand = new Pen(Color.FromArgb(220, 38, 38), 3f))
+                    {
+                        g.DrawArc(hand, cx + 6f, cy - 2f, 10f, 13f, 270, 180);
+                    }
+                    // Snowflake pattern on mug
+                    using (SolidBrush snowDeco = new SolidBrush(Color.FromArgb(220, 255, 255, 255)))
+                    {
+                        g.FillEllipse(snowDeco, cx - 2f, cy + 4f, 4f, 4f);
+                    }
+                    // Whipped cream & marshmallows
+                    using (SolidBrush cream = new SolidBrush(Color.White))
+                    {
+                        g.FillEllipse(cream, cx - 10f, cy - 9f, 20f, 8f);
+                        g.FillEllipse(cream, cx - 5f, cy - 12f, 10f, 7f);
+                    }
+                    // Rising steam swirls
+                    using (Pen steam = new Pen(Color.FromArgb(140, 255, 255, 255), 1.2f))
+                    {
+                        g.DrawArc(steam, cx - 5f, cy - 19f, 5f, 8f, 90, 180);
+                        g.DrawArc(steam, cx + 2f, cy - 21f, 5f, 8f, 270, 180);
+                    }
+                    break;
+
+                case "santahat":
+                    PointF[] hatPts = new PointF[] {
+                        new PointF(cx + 9f, cy - 14f),
+                        new PointF(cx + 14f, cy + 5f),
+                        new PointF(cx - 14f, cy + 5f)
+                    };
+                    using (SolidBrush hat = new SolidBrush(Color.FromArgb(235, 35, 50)))
+                    {
+                        g.FillPolygon(hat, hatPts);
+                    }
+                    using (SolidBrush fluff = new SolidBrush(Color.White))
+                    {
+                        g.FillRectangle(fluff, cx - 16f, cy + 5f, 32f, 7f);
+                        g.FillEllipse(fluff, cx + 7f, cy - 18f, 9f, 9f);
+                    }
+                    break;
+
+                case "boat":
+                    // Hull (red bottom, cream upper)
+                    PointF[] hullPts = new PointF[] {
+                        new PointF(cx - 20f, cy + 2f),
+                        new PointF(cx + 20f, cy + 2f),
+                        new PointF(cx + 14f, cy + 14f),
+                        new PointF(cx - 14f, cy + 14f)
+                    };
+                    using (SolidBrush hullRed = new SolidBrush(Color.FromArgb(220, 38, 38)))
+                    {
+                        g.FillPolygon(hullRed, hullPts);
+                    }
+                    using (SolidBrush hullWhite = new SolidBrush(Color.FromArgb(250, 245, 235)))
+                    {
+                        g.FillRectangle(hullWhite, cx - 18f, cy + 2f, 36f, 4f);
+                    }
+                    // Yellow portholes
+                    using (SolidBrush portHole = new SolidBrush(Color.FromArgb(254, 240, 138)))
+                    {
+                        g.FillEllipse(portHole, cx - 10f, cy + 8f, 4f, 4f);
+                        g.FillEllipse(portHole, cx - 2f, cy + 8f, 4f, 4f);
+                        g.FillEllipse(portHole, cx + 6f, cy + 8f, 4f, 4f);
+                    }
+                    // Mast and flag
+                    using (Pen mastPen = new Pen(Color.FromArgb(180, 110, 50), 2f))
+                    {
+                        g.DrawLine(mastPen, cx + 5f, cy + 2f, cx + 5f, cy - 16f);
+                    }
+                    using (SolidBrush flagB = new SolidBrush(Color.FromArgb(239, 68, 68)))
+                    {
+                        g.FillPolygon(flagB, new PointF[] { new PointF(cx + 6f, cy - 16f), new PointF(cx + 15f, cy - 12f), new PointF(cx + 6f, cy - 8f) });
+                    }
+                    // Mini Christmas Tree on deck
+                    using (SolidBrush treeB = new SolidBrush(Color.FromArgb(34, 155, 65)))
+                    {
+                        g.FillPolygon(treeB, new PointF[] { new PointF(cx - 8f, cy - 12f), new PointF(cx - 1f, cy + 2f), new PointF(cx - 15f, cy + 2f) });
+                    }
+                    using (SolidBrush starB = new SolidBrush(Color.FromArgb(255, 215, 0)))
+                    {
+                        g.FillEllipse(starB, cx - 9.5f, cy - 14f, 3.5f, 3.5f);
+                    }
+                    break;
+            }
+        }
+    }
+
     public class ChristmasManager
     {
         public const int PART_NONE = 0;
@@ -828,12 +1280,13 @@ namespace BoWeather
         public List<ChristmasGiftItem> Gifts { get; private set; }
         public List<ChristmasLightsItem> Lights { get; private set; }
         public List<ChristmasStarItem> Stars { get; private set; }
+        public List<ChristmasOrnamentItem> Ornaments { get; private set; }
         public bool ShowSantaHat { get; set; }
         public bool BehindActiveWindows { get; set; }
 
         public int TotalItemCount
         {
-            get { return Trees.Count + Gifts.Count + Lights.Count + Stars.Count; }
+            get { return Trees.Count + Gifts.Count + Lights.Count + Stars.Count + Ornaments.Count; }
         }
 
         private object _grabbedItem = null;
@@ -850,6 +1303,7 @@ namespace BoWeather
             Gifts = new List<ChristmasGiftItem>();
             Lights = new List<ChristmasLightsItem>();
             Stars = new List<ChristmasStarItem>();
+            Ornaments = new List<ChristmasOrnamentItem>();
             ShowSantaHat = false;
             BehindActiveWindows = true;
 
@@ -861,6 +1315,15 @@ namespace BoWeather
         {
             ChristmasTreeItem item = new ChristmasTreeItem(x, y);
             Trees.Add(item);
+            SaveSettings();
+            return item;
+        }
+
+        public ChristmasOrnamentItem AddOrnament(string type, float x, float y)
+        {
+            ChristmasOrnamentItem item = new ChristmasOrnamentItem(type, x, y);
+            item.IsHovered = true;
+            Ornaments.Add(item);
             SaveSettings();
             return item;
         }
@@ -916,6 +1379,11 @@ namespace BoWeather
                 Stars.Remove((ChristmasStarItem)item);
                 SaveSettings();
             }
+            else if (item is ChristmasOrnamentItem)
+            {
+                Ornaments.Remove((ChristmasOrnamentItem)item);
+                SaveSettings();
+            }
         }
 
         public void ClearAll()
@@ -924,6 +1392,7 @@ namespace BoWeather
             Gifts.Clear();
             Lights.Clear();
             Stars.Clear();
+            Ornaments.Clear();
             SaveSettings();
         }
 
@@ -980,6 +1449,13 @@ namespace BoWeather
                 g.IsHovered = g.GetBounds().Contains(mouseX, mouseY);
                 g.HoverDelete = g.GetDeleteButtonBounds().Contains(mouseX, mouseY);
             }
+
+            for (int i = 0; i < Ornaments.Count; i++)
+            {
+                ChristmasOrnamentItem o = Ornaments[i];
+                o.IsHovered = o.GetBounds().Contains(mouseX, mouseY);
+                o.HoverDelete = o.GetDeleteButtonBounds().Contains(mouseX, mouseY);
+            }
         }
 
         public object HitTest(float mouseX, float mouseY, out int hitPart)
@@ -1020,6 +1496,15 @@ namespace BoWeather
                 {
                     hitPart = PART_DELETE;
                     return Gifts[i];
+                }
+            }
+
+            for (int i = Ornaments.Count - 1; i >= 0; i--)
+            {
+                if (Ornaments[i].GetDeleteButtonBounds().Contains(mouseX, mouseY))
+                {
+                    hitPart = PART_DELETE;
+                    return Ornaments[i];
                 }
             }
 
@@ -1078,7 +1563,20 @@ namespace BoWeather
                 }
             }
 
-            // 6. Check Lights Wire Body
+            // 6. Check Ornaments
+            for (int i = Ornaments.Count - 1; i >= 0; i--)
+            {
+                ChristmasOrnamentItem o = Ornaments[i];
+                RectangleF ob = o.GetBounds();
+                ob.Inflate(5f, 5f);
+                if (ob.Contains(mouseX, mouseY))
+                {
+                    hitPart = PART_BODY;
+                    return o;
+                }
+            }
+
+            // 7. Check Lights Wire Body
             for (int i = Lights.Count - 1; i >= 0; i--)
             {
                 ChristmasLightsItem l = Lights[i];
@@ -1141,6 +1639,14 @@ namespace BoWeather
                 g.GrabOffsetY = mouseY - g.Y;
                 g.Vx = 0f;
                 g.Vy = 0f;
+            }
+            else if (hit is ChristmasOrnamentItem)
+            {
+                ChristmasOrnamentItem o = (ChristmasOrnamentItem)hit;
+                o.IsGrabbed = true;
+                o.AttachedWindow = IntPtr.Zero;
+                o.GrabOffsetX = mouseX - o.X;
+                o.GrabOffsetY = mouseY - o.Y;
             }
         }
 
@@ -1207,6 +1713,17 @@ namespace BoWeather
                 if (Math.Abs(dx) > 4f && onSnowPuff != null && _rand.Next(4) == 0)
                 {
                     onSnowPuff(g.X, g.Y, 2);
+                }
+            }
+            else if (_grabbedItem is ChristmasOrnamentItem)
+            {
+                ChristmasOrnamentItem o = (ChristmasOrnamentItem)_grabbedItem;
+                o.X = mouseX - o.GrabOffsetX;
+                o.Y = mouseY - o.GrabOffsetY;
+
+                if (Math.Abs(dx) > 4f && onSnowPuff != null && _rand.Next(3) == 0)
+                {
+                    onSnowPuff(o.X, o.Y, 2);
                 }
             }
         }
@@ -1341,6 +1858,42 @@ namespace BoWeather
 
                 SaveSettings();
             }
+            else if (_grabbedItem is ChristmasOrnamentItem)
+            {
+                ChristmasOrnamentItem o = (ChristmasOrnamentItem)_grabbedItem;
+                o.IsGrabbed = false;
+                bool placed = false;
+
+                if (winMgr != null)
+                {
+                    List<WindowInfo> windows = winMgr.ActiveWindows;
+                    for (int w = 0; w < windows.Count; w++)
+                    {
+                        WindowInfo win = windows[w];
+                        Rectangle r = win.Bounds;
+                        if (o.X >= r.Left && o.X <= r.Right &&
+                            o.Y >= r.Top - 35f && o.Y <= r.Top + 20f)
+                        {
+                            o.Y = r.Top;
+                            o.AttachedWindow = win.Handle;
+                            o.WindowOffsetX = o.X - r.Left;
+                            o.WindowOffsetY = r.Top - o.Y;
+                            placed = true;
+                            if (onSnowPuff != null) onSnowPuff(o.X, o.Y, 5);
+                            break;
+                        }
+                    }
+                }
+
+                if (!placed)
+                {
+                    o.Y = floorY - 6f;
+                    o.AttachedWindow = IntPtr.Zero;
+                    if (onSnowPuff != null) onSnowPuff(o.X, o.Y, 5);
+                }
+
+                SaveSettings();
+            }
 
             _grabbedItem = null;
             _grabbedPart = PART_NONE;
@@ -1471,6 +2024,36 @@ namespace BoWeather
                     }
                 }
             }
+
+            // 4. Update Ornaments Window Attachment
+            for (int i = 0; i < Ornaments.Count; i++)
+            {
+                ChristmasOrnamentItem o = Ornaments[i];
+                if (!o.IsGrabbed && o.AttachedWindow != IntPtr.Zero && winMgr != null)
+                {
+                    Rectangle curBounds;
+                    bool hasMoved;
+                    if (winMgr.TryGetWindowCurrentBounds(o.AttachedWindow, out curBounds, out hasMoved))
+                    {
+                        if (o.X < curBounds.Left - 10f || o.X > curBounds.Right + 10f)
+                        {
+                            o.AttachedWindow = IntPtr.Zero;
+                            o.Y = floorY - 6f;
+                            if (onSnowPuff != null) onSnowPuff(o.X, o.Y, 5);
+                        }
+                        else
+                        {
+                            o.X = curBounds.Left + o.WindowOffsetX;
+                            o.Y = curBounds.Top - o.WindowOffsetY;
+                        }
+                    }
+                    else
+                    {
+                        o.AttachedWindow = IntPtr.Zero;
+                        o.Y = floorY - 6f;
+                    }
+                }
+            }
         }
 
         public void Draw(Graphics g, WindowManager winMgr, int screenWidth, int screenHeight, int floorY)
@@ -1516,6 +2099,12 @@ namespace BoWeather
                 for (int i = 0; i < Stars.Count; i++)
                 {
                     Stars[i].Draw(g, _animTick);
+                }
+
+                // 5. Draw Ornaments (Candles, Baubles, Wreaths, Stockings, etc.)
+                for (int i = 0; i < Ornaments.Count; i++)
+                {
+                    Ornaments[i].Draw(g, _animTick);
                 }
             }
             finally
@@ -1616,6 +2205,11 @@ namespace BoWeather
                     lines.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "star={0:F1},{1:F1}", s.X, s.Y));
                 }
 
+                foreach (ChristmasOrnamentItem o in Ornaments)
+                {
+                    lines.Add(string.Format(System.Globalization.CultureInfo.InvariantCulture, "ornament={0},{1:F1},{2:F1}", o.Type, o.X, o.Y));
+                }
+
                 File.WriteAllLines(_settingsPath, lines.ToArray());
             }
             catch { }
@@ -1629,6 +2223,7 @@ namespace BoWeather
                 Gifts.Clear();
                 Lights.Clear();
                 Stars.Clear();
+                Ornaments.Clear();
 
                 if (!File.Exists(_settingsPath)) return;
                 string[] lines = File.ReadAllLines(_settingsPath);
@@ -1711,6 +2306,20 @@ namespace BoWeather
                                 float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out sy))
                             {
                                 Stars.Add(new ChristmasStarItem(sx, sy));
+                            }
+                        }
+                    }
+                    else if (key == "ornament")
+                    {
+                        string[] parts = val.Split(',');
+                        if (parts.Length >= 3)
+                        {
+                            string oType = parts[0];
+                            float ox, oy;
+                            if (float.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out ox) &&
+                                float.TryParse(parts[2], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out oy))
+                            {
+                                Ornaments.Add(new ChristmasOrnamentItem(oType, ox, oy));
                             }
                         }
                     }

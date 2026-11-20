@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using BoWeather.Particles;
 
 namespace BoWeather
 {
@@ -11,63 +12,73 @@ namespace BoWeather
         private readonly OverlayForm _overlay;
         private readonly bool _isDarkMode;
 
-        // Colors for gifts
-        private readonly Color[] _giftBoxColors = new Color[]
+        // Form Layout
+        private Rectangle _headerRect;
+        private Rectangle _closeBtnRect;
+        private Rectangle _heroCardRect;
+        private Rectangle _btnPlantRect;
+
+        // Grid of 16 Tiles (4x4)
+        private const int COLS = 4;
+        private const int ROWS = 4;
+        private const int TOTAL_TILES = 16;
+        private Rectangle[] _tileRects = new Rectangle[TOTAL_TILES];
+
+        private readonly string[] _tileIds = new string[]
+        {
+            "lights", "candle", "redbauble", "goldbauble",
+            "star", "wreath", "stocking", "candycane",
+            "gift", "bells", "gingerbread", "holly",
+            "santahat", "snowglobe", "cocoa", "boat"
+        };
+
+        private readonly string[] _tileLabels = new string[]
+        {
+            "Lights", "Candle", "Red bauble", "Gold bauble",
+            "Star", "Wreath", "Stocking", "Candy cane",
+            "Gift", "Bells", "Gingerbread", "Holly",
+            "Santa hat", "Snow globe", "Cocoa", "Boat"
+        };
+
+        // Gift color cycler
+        private int _giftColorIdx = 0;
+        private readonly Color[] _giftColors = new Color[]
         {
             Color.FromArgb(220, 38, 38),   // Red
             Color.FromArgb(22, 163, 74),   // Green
             Color.FromArgb(37, 99, 235),   // Blue
-            Color.FromArgb(217, 119, 6)    // Amber Gold
+            Color.FromArgb(217, 119, 6)    // Gold
         };
-
-        private readonly Color[] _giftRibbonColors = new Color[]
+        private readonly Color[] _ribbonColors = new Color[]
         {
-            Color.FromArgb(255, 215, 0),   // Gold
-            Color.FromArgb(254, 240, 138), // Pale Gold
-            Color.FromArgb(255, 255, 255), // White
-            Color.FromArgb(239, 68, 68)    // Red
+            Color.FromArgb(255, 215, 0),
+            Color.FromArgb(254, 240, 138),
+            Color.FromArgb(255, 255, 255),
+            Color.FromArgb(239, 68, 68)
         };
 
-        private int _selectedGiftColor = 0;
+        // Footer
+        private Rectangle _footerRect;
+        private Rectangle _behindToggleRect;
+        private Rectangle _btnTakeAllDownRect;
 
-        // Layout Rectangles
-        private Rectangle _headerRect;
-        private Rectangle _closeBtnRect;
-        private Rectangle _cardTreeRect;
-        private Rectangle _cardLightsRect;
-        private Rectangle _cardStarRect;
-        private Rectangle _cardGiftRect;
-        private Rectangle _cardHatRect;
-        private Rectangle _cardBehindRect;
-
-        private Rectangle _btnTreeAddRect;
-        private Rectangle _btnLightsAddRect;
-        private Rectangle _btnStarAddRect;
-        private Rectangle _btnGiftAddRect;
-        private Rectangle _toggleHatRect;
-        private Rectangle _toggleBehindRect;
-        private Rectangle[] _giftSwatchRects = new Rectangle[4];
-
-        private Rectangle _btnClearAllRect;
-        private Rectangle _btnCloseBottomRect;
-        private Rectangle _hintRect;
-
-        // Hover & Interaction States
-        private int _hoveredCard = -1;
-        private int _hoveredAction = -1;
-        private int _hoveredSwatch = -1;
+        // Interaction state
+        private int _hoveredTile = -1;
+        private bool _hoverHero = false;
         private bool _hoverClose = false;
+        private bool _hoverBehind = false;
+        private bool _hoverTakeAll = false;
         private bool _isDraggingForm = false;
         private Point _dragStartCursor;
         private Point _dragStartFormPos;
 
         // Fonts
-        private readonly Font _titleFont;
-        private readonly Font _subFont;
-        private readonly Font _labelFont;
-        private readonly Font _descFont;
+        private readonly Font _guideFont;
+        private readonly Font _heroTitleFont;
+        private readonly Font _heroSubFont;
+        private readonly Font _tileLabelFont;
+        private readonly Font _footerCountFont;
         private readonly Font _btnFont;
-        private readonly Font _hintFont;
 
         public ChristmasDecorForm(ChristmasManager mgr, OverlayForm overlay, bool isDarkMode)
         {
@@ -81,17 +92,17 @@ namespace BoWeather
             StartPosition = FormStartPosition.Manual;
             DoubleBuffered = true;
 
-            Size = new Size(390, 620);
+            Size = new Size(430, 620);
 
             Rectangle screen = Screen.PrimaryScreen.WorkingArea;
             Location = new Point(screen.Left + (screen.Width - Width) / 2, screen.Top + (screen.Height - Height) / 2);
 
-            _titleFont = new Font("Segoe UI", 16f, FontStyle.Bold, GraphicsUnit.Pixel);
-            _subFont = new Font("Segoe UI", 11.5f, FontStyle.Regular, GraphicsUnit.Pixel);
-            _labelFont = new Font("Segoe UI", 13.5f, FontStyle.Bold, GraphicsUnit.Pixel);
-            _descFont = new Font("Segoe UI", 11f, FontStyle.Regular, GraphicsUnit.Pixel);
-            _btnFont = new Font("Segoe UI", 12f, FontStyle.Bold, GraphicsUnit.Pixel);
-            _hintFont = new Font("Segoe UI", 10.5f, FontStyle.Regular, GraphicsUnit.Pixel);
+            _guideFont = new Font("Segoe UI", 11f, FontStyle.Regular, GraphicsUnit.Pixel);
+            _heroTitleFont = new Font("Segoe UI", 15f, FontStyle.Bold, GraphicsUnit.Pixel);
+            _heroSubFont = new Font("Segoe UI", 10.5f, FontStyle.Regular, GraphicsUnit.Pixel);
+            _tileLabelFont = new Font("Segoe UI", 11.5f, FontStyle.Regular, GraphicsUnit.Pixel);
+            _footerCountFont = new Font("Segoe UI", 13f, FontStyle.Bold, GraphicsUnit.Pixel);
+            _btnFont = new Font("Segoe UI", 11.5f, FontStyle.Bold, GraphicsUnit.Pixel);
 
             CalculateLayout();
         }
@@ -100,61 +111,43 @@ namespace BoWeather
         {
             int w = ClientSize.Width;
             int pad = 16;
-            int top = 16;
 
-            _headerRect = new Rectangle(pad, top, w - pad * 2, 46);
-            _closeBtnRect = new Rectangle(w - pad - 32, top + 4, 32, 32);
+            // 1. Top Header Guide
+            _headerRect = new Rectangle(pad, 14, w - pad * 2 - 32, 44);
+            _closeBtnRect = new Rectangle(w - pad - 26, 16, 26, 26);
 
-            int startY = top + 50;
-            int cardW = w - pad * 2;
-            int btnW = 96;
-            int btnH = 34;
+            // 2. Hero Card: Christmas Tree
+            int heroY = _headerRect.Bottom + 6;
+            _heroCardRect = new Rectangle(pad, heroY, w - pad * 2, 74);
+            int btnW = 80;
+            int btnH = 32;
+            _btnPlantRect = new Rectangle(_heroCardRect.Right - btnW - 12, _heroCardRect.Y + (_heroCardRect.Height - btnH) / 2, btnW, btnH);
 
-            // Card 0: Tree (H=58)
-            _cardTreeRect = new Rectangle(pad, startY, cardW, 58);
-            _btnTreeAddRect = new Rectangle(_cardTreeRect.Right - btnW - 10, _cardTreeRect.Y + (_cardTreeRect.Height - btnH) / 2, btnW, btnH);
+            // 3. Grid of 16 Tiles (4x4)
+            int gridY = _heroCardRect.Bottom + 12;
+            int tileW = 92;
+            int tileH = 82;
+            int totalGridW = w - pad * 2;
+            int gapX = (totalGridW - COLS * tileW) / (COLS - 1);
+            int gapY = 8;
 
-            // Card 1: Lights (H=58)
-            _cardLightsRect = new Rectangle(pad, _cardTreeRect.Bottom + 6, cardW, 58);
-            _btnLightsAddRect = new Rectangle(_cardLightsRect.Right - btnW - 10, _cardLightsRect.Y + (_cardLightsRect.Height - btnH) / 2, btnW, btnH);
-
-            // Card 2: Star (H=58)
-            _cardStarRect = new Rectangle(pad, _cardLightsRect.Bottom + 6, cardW, 58);
-            _btnStarAddRect = new Rectangle(_cardStarRect.Right - btnW - 10, _cardStarRect.Y + (_cardStarRect.Height - btnH) / 2, btnW, btnH);
-
-            // Card 3: Gift (H=78) with color swatches
-            _cardGiftRect = new Rectangle(pad, _cardStarRect.Bottom + 6, cardW, 78);
-            _btnGiftAddRect = new Rectangle(_cardGiftRect.Right - btnW - 10, _cardGiftRect.Y + 8, btnW, btnH);
-            int swatchSize = 18;
-            int swatchGap = 8;
-            int swatchStartX = _cardGiftRect.X + 54;
-            int swatchY = _cardGiftRect.Y + 49;
-            for (int i = 0; i < 4; i++)
+            for (int r = 0; r < ROWS; r++)
             {
-                _giftSwatchRects[i] = new Rectangle(swatchStartX + i * (swatchSize + swatchGap), swatchY, swatchSize, swatchSize);
+                for (int c = 0; c < COLS; c++)
+                {
+                    int idx = r * COLS + c;
+                    int tx = pad + c * (tileW + gapX);
+                    int ty = gridY + r * (tileH + gapY);
+                    _tileRects[idx] = new Rectangle(tx, ty, tileW, tileH);
+                }
             }
 
-            // Card 4: Santa Hat (H=52)
-            _cardHatRect = new Rectangle(pad, _cardGiftRect.Bottom + 6, cardW, 52);
-            int switchW = 46;
-            int switchH = 26;
-            _toggleHatRect = new Rectangle(_cardHatRect.Right - switchW - 14, _cardHatRect.Y + (_cardHatRect.Height - switchH) / 2, switchW, switchH);
-
-            // Card 5: Behind Windows (H=52)
-            _cardBehindRect = new Rectangle(pad, _cardHatRect.Bottom + 6, cardW, 52);
-            _toggleBehindRect = new Rectangle(_cardBehindRect.Right - switchW - 14, _cardBehindRect.Y + (_cardBehindRect.Height - switchH) / 2, switchW, switchH);
-
-            // Hint box
-            _hintRect = new Rectangle(pad, _cardBehindRect.Bottom + 8, cardW, 30);
-
-            // Bottom action buttons
-            int bBtnH = 38;
-            int bGap = 10;
-            int halfW = (cardW - bGap) / 2;
-            int bottomY = _hintRect.Bottom + 8;
-
-            _btnClearAllRect = new Rectangle(pad, bottomY, halfW, bBtnH);
-            _btnCloseBottomRect = new Rectangle(pad + halfW + bGap, bottomY, halfW, bBtnH);
+            // 4. Footer Bar
+            int footerY = ClientSize.Height - 48;
+            _footerRect = new Rectangle(pad, footerY, w - pad * 2, 36);
+            _behindToggleRect = new Rectangle(_footerRect.X + 105, footerY + 3, 145, 28);
+            int takeBtnW = 125;
+            _btnTakeAllDownRect = new Rectangle(_footerRect.Right - takeBtnW, footerY + 2, takeBtnW, 32);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -162,23 +155,18 @@ namespace BoWeather
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
 
             int w = ClientSize.Width;
             int h = ClientSize.Height;
 
-            Color bg = _isDarkMode ? Color.FromArgb(248, 22, 26, 33) : Color.FromArgb(250, 255, 255, 255);
-            Color border = _isDarkMode ? Color.FromArgb(70, 255, 255, 255) : Color.FromArgb(40, 0, 0, 0);
-            Color textMain = _isDarkMode ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 22, 26, 33);
-            Color textSub = _isDarkMode ? Color.FromArgb(160, 255, 255, 255) : Color.FromArgb(140, 30, 35, 45);
-            Color cardBg = _isDarkMode ? Color.FromArgb(140, 32, 37, 46) : Color.FromArgb(240, 245, 248, 252);
-            Color cardHover = _isDarkMode ? Color.FromArgb(190, 42, 48, 60) : Color.FromArgb(255, 238, 242, 248);
-            Color accentColor = Color.FromArgb(255, 22, 119, 255);
-            Color accentGreen = Color.FromArgb(255, 22, 163, 74);
-            Color accentFestive = Color.FromArgb(255, 220, 38, 38);
-            Color accentGold = Color.FromArgb(255, 217, 119, 6);
+            Color bg = _isDarkMode ? Color.FromArgb(248, 22, 26, 36) : Color.FromArgb(250, 248, 250, 252);
+            Color border = _isDarkMode ? Color.FromArgb(60, 255, 255, 255) : Color.FromArgb(40, 0, 0, 0);
+            Color textMain = _isDarkMode ? Color.FromArgb(255, 255, 255, 255) : Color.FromArgb(255, 20, 24, 33);
+            Color textSub = _isDarkMode ? Color.FromArgb(175, 200, 215, 230) : Color.FromArgb(140, 45, 55, 70);
 
-            // 1. Form Rounded Background & Border
-            using (GraphicsPath formPath = VectorIcons.CreateRoundedRect(new RectangleF(0.5f, 0.5f, w - 1f, h - 1f), 20f))
+            // 1. Window Frosted Glass Body & Border
+            using (GraphicsPath formPath = VectorIcons.CreateRoundedRect(new RectangleF(0.5f, 0.5f, w - 1f, h - 1f), 22f))
             {
                 using (SolidBrush bgBrush = new SolidBrush(bg))
                 {
@@ -190,16 +178,16 @@ namespace BoWeather
                 }
             }
 
-            // 2. Header
-            using (SolidBrush titleB = new SolidBrush(textMain))
-            using (SolidBrush subB = new SolidBrush(textSub))
+            // 2. Top Header Instruction Text
+            using (SolidBrush guideBrush = new SolidBrush(textSub))
             {
-                g.DrawString("🎄 Deck Your Screen", _titleFont, titleB, 18, 16);
-                g.DrawString("Pilih aksesoris untuk dipasang & diatur di desktop", _subFont, subB, 20, 39);
+                StringFormat sf = new StringFormat();
+                sf.LineAlignment = StringAlignment.Center;
+                g.DrawString("Pick something and it lands on your desktop, behind your windows. Drag it anywhere, pull the ends of the lights to stretch them, and press \u00D7 to take one down.", _guideFont, guideBrush, _headerRect, sf);
             }
 
-            // Top Close Button (✕)
-            using (GraphicsPath closePath = VectorIcons.CreateRoundedRect(new RectangleF(_closeBtnRect.X, _closeBtnRect.Y, _closeBtnRect.Width, _closeBtnRect.Height), 16f))
+            // Close button (x)
+            using (GraphicsPath closePath = VectorIcons.CreateRoundedRect(new RectangleF(_closeBtnRect.X, _closeBtnRect.Y, _closeBtnRect.Width, _closeBtnRect.Height), 13f))
             {
                 if (_hoverClose)
                 {
@@ -208,192 +196,474 @@ namespace BoWeather
                         g.FillPath(ch, closePath);
                     }
                 }
-                VectorIcons.DrawIcon(g, "close", _closeBtnRect.X + 16, _closeBtnRect.Y + 16, 12f, textSub);
-            }
-
-            // 3. Card 0: Pohon Natal
-            DrawCatalogCard(g, _cardTreeRect, "tree", "Pohon Natal 3D", "Pohon cemara 3D berhias salju, ornamen & lampu", _hoveredCard == 0, cardBg, cardHover, textMain, textSub);
-            string treeBtnText = _mgr.Trees.Count > 0 ? "+ Tambah (" + _mgr.Trees.Count + ")" : "+ Pasang";
-            DrawPillButton(g, _btnTreeAddRect, treeBtnText, _hoveredAction == 0, accentGreen);
-
-            // 4. Card 1: Lampu Natal Gantung (NO STAR ON IT!)
-            DrawCatalogCard(g, _cardLightsRect, "lights", "Lampu Gantung", "Tarik ujung kiri/kanan untuk atur ukuran!", _hoveredCard == 1, cardBg, cardHover, textMain, textSub);
-            string lightsBtnText = _mgr.Lights.Count > 0 ? "+ Tambah (" + _mgr.Lights.Count + ")" : "+ Pasang";
-            DrawPillButton(g, _btnLightsAddRect, lightsBtnText, _hoveredAction == 1, accentGold);
-
-            // 5. Card 2: Lampu Bintang (Independent Star!)
-            DrawCatalogCard(g, _cardStarRect, "star", "Lampu Bintang (Star)", "Bintang emas bersinar, geser sesukamu", _hoveredCard == 2, cardBg, cardHover, textMain, textSub);
-            string starBtnText = _mgr.Stars.Count > 0 ? "+ Tambah (" + _mgr.Stars.Count + ")" : "+ Pasang";
-            DrawPillButton(g, _btnStarAddRect, starBtnText, _hoveredAction == 2, Color.FromArgb(250, 204, 21), Color.FromArgb(120, 50, 0));
-
-            // 6. Card 3: Kado Natal 3D
-            DrawCatalogCard(g, _cardGiftRect, "gift", "Kado Natal 3D", "Kotak kado bisa ditumpuk & dilempar", _hoveredCard == 3, cardBg, cardHover, textMain, textSub);
-            string giftBtnText = _mgr.Gifts.Count > 0 ? "+ Tambah (" + _mgr.Gifts.Count + ")" : "+ Tambah";
-            DrawPillButton(g, _btnGiftAddRect, giftBtnText, _hoveredAction == 3, accentFestive);
-
-            // Color Swatches on Gift Card
-            using (SolidBrush stx = new SolidBrush(textSub))
-            {
-                g.DrawString("Warna:", _hintFont, stx, _cardGiftRect.X + 12, _cardGiftRect.Y + 52);
-            }
-            for (int i = 0; i < 4; i++)
-            {
-                Rectangle sr = _giftSwatchRects[i];
-                bool isSelected = (_selectedGiftColor == i);
-                bool isHover = (_hoveredSwatch == i);
-
-                using (SolidBrush sb = new SolidBrush(_giftBoxColors[i]))
+                using (Pen xp = new Pen(_hoverClose ? textMain : textSub, 1.8f))
                 {
-                    g.FillEllipse(sb, sr);
-                }
-
-                if (isSelected || isHover)
-                {
-                    using (Pen sp = new Pen(isSelected ? Color.White : Color.FromArgb(180, 255, 255, 255), isSelected ? 2.2f : 1.5f))
-                    {
-                        g.DrawEllipse(sp, sr.X - 1, sr.Y - 1, sr.Width + 2, sr.Height + 2);
-                    }
+                    xp.StartCap = LineCap.Round;
+                    xp.EndCap = LineCap.Round;
+                    g.DrawLine(xp, _closeBtnRect.X + 8, _closeBtnRect.Y + 8, _closeBtnRect.Right - 8, _closeBtnRect.Bottom - 8);
+                    g.DrawLine(xp, _closeBtnRect.Right - 8, _closeBtnRect.Y + 8, _closeBtnRect.X + 8, _closeBtnRect.Bottom - 8);
                 }
             }
 
-            // 7. Card 4: Topi Santa untuk Snowman
-            DrawCatalogCard(g, _cardHatRect, "santahat", "Topi Santa Snowman", "Pakaikan topi Sinterklas ke boneka salju", _hoveredCard == 4, cardBg, cardHover, textMain, textSub);
-            DrawToggleSwitch(g, _toggleHatRect, _mgr.ShowSantaHat, _hoveredAction == 4, accentFestive);
-
-            // 8. Card 5: Di Belakang Jendela (Behind Windows)
-            DrawCatalogCard(g, _cardBehindRect, "physics", "Di Belakang Jendela", "Dekorasi tidak menutupi isi aplikasi kerja", _hoveredCard == 5, cardBg, cardHover, textMain, textSub);
-            DrawToggleSwitch(g, _toggleBehindRect, _mgr.BehindActiveWindows, _hoveredAction == 5, accentColor);
-
-            // 9. Hint / Guide Notice
-            using (GraphicsPath hp = VectorIcons.CreateRoundedRect(new RectangleF(_hintRect.X, _hintRect.Y, _hintRect.Width, _hintRect.Height), 8f))
+            // 3. Hero Card: Christmas Tree
+            Color heroBg = _hoverHero ? (_isDarkMode ? Color.FromArgb(200, 42, 50, 68) : Color.FromArgb(240, 230, 238, 248)) :
+                                        (_isDarkMode ? Color.FromArgb(140, 32, 38, 52) : Color.FromArgb(225, 240, 245, 252));
+            using (GraphicsPath hp = VectorIcons.CreateRoundedRect(_heroCardRect, 14f))
             {
-                using (SolidBrush hb = new SolidBrush(_isDarkMode ? Color.FromArgb(30, 255, 255, 255) : Color.FromArgb(18, 0, 0, 0)))
-                {
-                    g.FillPath(hb, hp);
-                }
-            }
-            using (SolidBrush hintBrush = new SolidBrush(textSub))
-            {
-                StringFormat sf = new StringFormat();
-                sf.Alignment = StringAlignment.Center;
-                sf.LineAlignment = StringAlignment.Center;
-                g.DrawString("💡 Tarik ujung lampu untuk atur panjangnya. Klik (X) pada item untuk menghapus.", _hintFont, hintBrush, _hintRect, sf);
+                using (SolidBrush hb = new SolidBrush(heroBg)) g.FillPath(hb, hp);
+                using (Pen hpen = new Pen(_isDarkMode ? Color.FromArgb(40, 255, 255, 255) : Color.FromArgb(30, 0, 0, 0), 1f)) g.DrawPath(hpen, hp);
             }
 
-            // 10. Bottom Buttons
-            DrawOutlineButton(g, _btnClearAllRect, "🗑️ Hapus Semua", _hoveredAction == 6,
-                Color.FromArgb(220, 38, 38), _isDarkMode ? Color.FromArgb(40, 220, 38, 38) : Color.FromArgb(20, 220, 38, 38));
+            // 3D Tree mini preview on left
+            DrawMiniTree(g, _heroCardRect.X + 36, _heroCardRect.Y + _heroCardRect.Height * 0.5f + 18f, 38f, 54f);
 
-            DrawPillButton(g, _btnCloseBottomRect, "Selesai", _hoveredAction == 7, accentColor);
-        }
-
-        private void DrawCatalogCard(Graphics g, Rectangle r, string iconName, string title, string sub, bool isHover,
-            Color cardBg, Color cardHover, Color textMain, Color textSub)
-        {
-            using (GraphicsPath cp = VectorIcons.CreateRoundedRect(new RectangleF(r.X, r.Y, r.Width, r.Height), 13f))
+            // Tree labels
+            int heroTextX = _heroCardRect.X + 70;
+            using (SolidBrush tb = new SolidBrush(textMain))
             {
-                using (SolidBrush bgB = new SolidBrush(isHover ? cardHover : cardBg))
-                {
-                    g.FillPath(bgB, cp);
-                }
-                using (Pen bp = new Pen(_isDarkMode ? Color.FromArgb(35, 255, 255, 255) : Color.FromArgb(25, 0, 0, 0), 1f))
-                {
-                    g.DrawPath(bp, cp);
-                }
+                g.DrawString("Christmas tree", _heroTitleFont, tb, heroTextX, _heroCardRect.Y + 14);
             }
-
-            // Icon square at left
-            int iconBoxSize = 34;
-            int iconBoxX = r.X + 8;
-            int iconBoxY = r.Y + (r.Height - iconBoxSize) / 2;
-            using (GraphicsPath ip = VectorIcons.CreateRoundedRect(new RectangleF(iconBoxX, iconBoxY, iconBoxSize, iconBoxSize), 9f))
-            {
-                Color ibg = _isDarkMode ? Color.FromArgb(40, 255, 255, 255) : Color.FromArgb(20, 0, 0, 0);
-                using (SolidBrush ib = new SolidBrush(ibg))
-                {
-                    g.FillPath(ib, ip);
-                }
-                VectorIcons.DrawIcon(g, iconName, iconBoxX + iconBoxSize * 0.5f, iconBoxY + iconBoxSize * 0.5f, 19f, textMain);
-            }
-
-            // Labels
-            int textX = iconBoxX + iconBoxSize + 10;
-            using (SolidBrush mb = new SolidBrush(textMain))
             using (SolidBrush sb = new SolidBrush(textSub))
             {
-                g.DrawString(title, _labelFont, mb, textX, r.Y + 8);
-                g.DrawString(sub, _descFont, sb, textX, r.Y + 27);
+                Rectangle textR = new Rectangle(heroTextX, _heroCardRect.Y + 36, _heroCardRect.Width - 170, 32);
+                g.DrawString("Plant one in the snow and dress it up. If it isn't snowing, the snow turns on.", _heroSubFont, sb, textR);
             }
-        }
 
-        private void DrawPillButton(Graphics g, Rectangle r, string text, bool isHover, Color baseColor, Color? textCol = null)
-        {
-            Color bg = isHover ? Color.FromArgb(Math.Min(255, (int)(baseColor.R * 1.15f)),
-                                                Math.Min(255, (int)(baseColor.G * 1.15f)),
-                                                Math.Min(255, (int)(baseColor.B * 1.15f))) : baseColor;
-
-            using (GraphicsPath bp = VectorIcons.CreateRoundedRect(new RectangleF(r.X, r.Y, r.Width, r.Height), r.Height * 0.5f))
+            // Plant button on hero card
+            string plantText = _mgr.Trees.Count > 0 ? "+ Plant (" + _mgr.Trees.Count + ")" : "+ Plant";
+            using (GraphicsPath pbp = VectorIcons.CreateRoundedRect(_btnPlantRect, 16f))
             {
-                using (SolidBrush bb = new SolidBrush(bg))
+                using (SolidBrush pbb = new SolidBrush(Color.FromArgb(255, 22, 163, 74))) g.FillPath(pbb, pbp);
+            }
+            using (SolidBrush pbt = new SolidBrush(Color.White))
+            {
+                StringFormat csf = new StringFormat();
+                csf.Alignment = StringAlignment.Center;
+                csf.LineAlignment = StringAlignment.Center;
+                g.DrawString(plantText, _btnFont, pbt, _btnPlantRect, csf);
+            }
+
+            // 4. Grid of 16 Tiles (4x4)
+            for (int i = 0; i < TOTAL_TILES; i++)
+            {
+                Rectangle tr = _tileRects[i];
+                bool isHover = (_hoveredTile == i);
+                string id = _tileIds[i];
+
+                Color tileBg = isHover ? (_isDarkMode ? Color.FromArgb(190, 44, 52, 70) : Color.FromArgb(240, 230, 238, 248)) :
+                                         (_isDarkMode ? Color.FromArgb(120, 30, 36, 48) : Color.FromArgb(220, 238, 244, 250));
+
+                using (GraphicsPath tp = VectorIcons.CreateRoundedRect(tr, 13f))
                 {
-                    g.FillPath(bb, bp);
+                    using (SolidBrush tb = new SolidBrush(tileBg)) g.FillPath(tb, tp);
+                    using (Pen tpn = new Pen(_isDarkMode ? Color.FromArgb(30, 255, 255, 255) : Color.FromArgb(25, 0, 0, 0), 1f)) g.DrawPath(tpn, tp);
+                }
+
+                // Tile Icon in upper area
+                float iconCx = tr.X + tr.Width * 0.5f;
+                float iconCy = tr.Y + 34;
+                DrawTileIcon(g, id, iconCx, iconCy, 34f);
+
+                // Tile Label in lower area
+                using (SolidBrush lb = new SolidBrush(textMain))
+                {
+                    StringFormat lsf = new StringFormat();
+                    lsf.Alignment = StringAlignment.Center;
+                    lsf.LineAlignment = StringAlignment.Center;
+                    Rectangle lr = new Rectangle(tr.X, tr.Bottom - 24, tr.Width, 20);
+                    g.DrawString(_tileLabels[i], _tileLabelFont, lb, lr, lsf);
                 }
             }
 
-            Color tc = textCol.HasValue ? textCol.Value : Color.White;
-            using (SolidBrush tb = new SolidBrush(tc))
+            // 5. Footer Bar
+            // Left: {count} of 30 up
+            using (SolidBrush fb = new SolidBrush(textSub))
             {
-                StringFormat sf = new StringFormat();
-                sf.Alignment = StringAlignment.Center;
-                sf.LineAlignment = StringAlignment.Center;
-                g.DrawString(text, _btnFont, tb, r, sf);
+                g.DrawString(_mgr.TotalItemCount + " of 30 up", _footerCountFont, fb, _footerRect.X + 4, _footerRect.Y + 8);
+            }
+
+            // Middle: Behind windows toggle
+            bool isBehind = _mgr.BehindActiveWindows;
+            Color togBg = _hoverBehind ? (_isDarkMode ? Color.FromArgb(40, 255, 255, 255) : Color.FromArgb(20, 0, 0, 0)) : Color.Transparent;
+            using (GraphicsPath bp = VectorIcons.CreateRoundedRect(_behindToggleRect, 8f))
+            {
+                if (_hoverBehind)
+                {
+                    using (SolidBrush bgb = new SolidBrush(togBg)) g.FillPath(bgb, bp);
+                }
+            }
+            Color checkCol = isBehind ? Color.FromArgb(34, 197, 94) : textSub;
+            using (Pen cp = new Pen(checkCol, 1.5f))
+            {
+                g.DrawRectangle(cp, _behindToggleRect.X + 4, _behindToggleRect.Y + 7, 13, 13);
+                if (isBehind)
+                {
+                    g.DrawLine(cp, _behindToggleRect.X + 6, _behindToggleRect.Y + 13, _behindToggleRect.X + 9, _behindToggleRect.Y + 17);
+                    g.DrawLine(cp, _behindToggleRect.X + 9, _behindToggleRect.Y + 17, _behindToggleRect.X + 15, _behindToggleRect.Y + 9);
+                }
+            }
+            using (SolidBrush tb = new SolidBrush(isBehind ? textMain : textSub))
+            {
+                g.DrawString("Behind windows", _tileLabelFont, tb, _behindToggleRect.X + 22, _behindToggleRect.Y + 6);
+            }
+
+            // Right: Take all down button
+            Color takeBg = _hoverTakeAll ? (_isDarkMode ? Color.FromArgb(80, 220, 38, 38) : Color.FromArgb(40, 220, 38, 38)) :
+                                           (_isDarkMode ? Color.FromArgb(45, 255, 255, 255) : Color.FromArgb(20, 0, 0, 0));
+            Color takeBorder = _hoverTakeAll ? Color.FromArgb(220, 38, 38) : (_isDarkMode ? Color.FromArgb(70, 255, 255, 255) : Color.FromArgb(40, 0, 0, 0));
+            using (GraphicsPath tap = VectorIcons.CreateRoundedRect(_btnTakeAllDownRect, 16f))
+            {
+                using (SolidBrush tab = new SolidBrush(takeBg)) g.FillPath(tab, tap);
+                using (Pen tapen = new Pen(takeBorder, 1.2f)) g.DrawPath(tapen, tap);
+            }
+            using (SolidBrush tat = new SolidBrush(_hoverTakeAll ? Color.FromArgb(239, 68, 68) : textMain))
+            {
+                StringFormat csf = new StringFormat();
+                csf.Alignment = StringAlignment.Center;
+                csf.LineAlignment = StringAlignment.Center;
+                g.DrawString("Take all down", _btnFont, tat, _btnTakeAllDownRect, csf);
             }
         }
 
-        private void DrawOutlineButton(Graphics g, Rectangle r, string text, bool isHover, Color accentColor, Color hoverBg)
+        private void DrawMiniTree(Graphics g, float cx, float cy, float tw, float th)
         {
-            using (GraphicsPath bp = VectorIcons.CreateRoundedRect(new RectangleF(r.X, r.Y, r.Width, r.Height), r.Height * 0.5f))
+            // Mini 3D preview tree matching the redesign
+            float halfW = tw * 0.5f;
+
+            // Trunk
+            using (SolidBrush trunkB = new SolidBrush(Color.FromArgb(255, 185, 110, 50)))
             {
-                if (isHover)
+                g.FillRectangle(trunkB, cx - 4, cy - 7, 8, 8);
+            }
+
+            // 3 tiers
+            DrawTierPoly(g, cx, cy - 5, tw * 0.96f, th * 0.38f);
+            DrawTierPoly(g, cx, cy - 15, tw * 0.76f, th * 0.35f);
+            DrawTierPoly(g, cx, cy - 25, tw * 0.54f, th * 0.35f);
+
+            // Mini glowing baubles
+            using (SolidBrush rB = new SolidBrush(Color.FromArgb(245, 38, 52))) g.FillEllipse(rB, cx - 8f, cy - 12f, 4.5f, 4.5f);
+            using (SolidBrush gB = new SolidBrush(Color.FromArgb(255, 195, 18))) g.FillEllipse(gB, cx + 5f, cy - 14f, 4.5f, 4.5f);
+            using (SolidBrush bB = new SolidBrush(Color.FromArgb(125, 215, 255))) g.FillEllipse(bB, cx - 4f, cy - 20f, 4.5f, 4.5f);
+            using (SolidBrush pB = new SolidBrush(Color.FromArgb(255, 85, 145))) g.FillEllipse(pB, cx + 4f, cy - 22f, 4.5f, 4.5f);
+
+            // Golden star on peak
+            using (SolidBrush sGlow = new SolidBrush(Color.FromArgb(80, 255, 215, 0)))
+            {
+                g.FillEllipse(sGlow, cx - 9f, cy - 43f, 18f, 18f);
+            }
+            ChristmasManager.DrawStarPolygon(g, cx, cy - 34f, 6.5f, 3.2f, Color.FromArgb(255, 255, 235, 80), Color.FromArgb(255, 245, 160, 20));
+        }
+
+        private void DrawTierPoly(Graphics g, float cx, float cy, float w, float h)
+        {
+            PointF[] pts = new PointF[] {
+                new PointF(cx, cy - h),
+                new PointF(cx + w * 0.5f, cy),
+                new PointF(cx - w * 0.5f, cy)
+            };
+            using (GraphicsPath gp = new GraphicsPath())
+            {
+                gp.AddPolygon(pts);
+                using (LinearGradientBrush lgb = new LinearGradientBrush(
+                    new PointF(cx, cy - h), new PointF(cx, cy),
+                    Color.FromArgb(255, 85, 215, 105), Color.FromArgb(255, 34, 145, 62)))
                 {
-                    using (SolidBrush bb = new SolidBrush(hoverBg))
+                    g.FillPath(lgb, gp);
+                }
+            }
+            // Snow shoulder caps
+            using (SolidBrush snowB = new SolidBrush(Color.White))
+            {
+                g.FillEllipse(snowB, cx - w * 0.5f - 1f, cy - 2.5f, w * 0.35f, 5f);
+                g.FillEllipse(snowB, cx + w * 0.15f, cy - 2.5f, w * 0.35f, 5f);
+            }
+        }
+
+        private void DrawTileIcon(Graphics g, string id, float cx, float cy, float s)
+        {
+            float r = s * 0.5f;
+            switch (id)
+            {
+                case "lights":
+                    using (Pen wp = new Pen(Color.FromArgb(170, 255, 255, 255), 1.4f))
                     {
-                        g.FillPath(bb, bp);
+                        g.DrawArc(wp, cx - r * 0.9f, cy - r * 0.6f, r * 1.8f, r * 0.9f, 20, 140);
                     }
-                }
-                using (Pen pen = new Pen(accentColor, 1.2f))
-                {
-                    g.DrawPath(pen, bp);
-                }
-            }
+                    Color[] bCols = new Color[] { Color.Red, Color.Gold, Color.DodgerBlue, Color.LimeGreen, Color.Magenta };
+                    for (int i = 0; i < 5; i++)
+                    {
+                        float bx = cx - r * 0.7f + i * (r * 0.35f);
+                        float by = cy + (float)Math.Sin(i * 0.8) * 3f;
+                        using (SolidBrush bb = new SolidBrush(bCols[i]))
+                        {
+                            g.FillEllipse(bb, bx - 3f, by - 3f, 6f, 6f);
+                        }
+                    }
+                    break;
 
-            using (SolidBrush tb = new SolidBrush(accentColor))
-            {
-                StringFormat sf = new StringFormat();
-                sf.Alignment = StringAlignment.Center;
-                sf.LineAlignment = StringAlignment.Center;
-                g.DrawString(text, _btnFont, tb, r, sf);
-            }
-        }
+                case "candle":
+                    using (SolidBrush baseB = new SolidBrush(Color.FromArgb(255, 230, 185, 50)))
+                    {
+                        g.FillEllipse(baseB, cx - 10f, cy + 8f, 20f, 6f);
+                    }
+                    using (LinearGradientBrush cb = new LinearGradientBrush(
+                        new PointF(cx - 5f, cy - 6f), new PointF(cx + 5f, cy - 6f),
+                        Color.FromArgb(255, 240, 50, 60), Color.FromArgb(255, 170, 20, 30)))
+                    {
+                        g.FillRectangle(cb, cx - 5f, cy - 6f, 10f, 16f);
+                    }
+                    using (SolidBrush flame = new SolidBrush(Color.FromArgb(255, 255, 215, 0)))
+                    {
+                        g.FillEllipse(flame, cx - 3.5f, cy - 15f, 7f, 10f);
+                    }
+                    using (SolidBrush core = new SolidBrush(Color.White))
+                    {
+                        g.FillEllipse(core, cx - 1.5f, cy - 12f, 3f, 5f);
+                    }
+                    break;
 
-        private void DrawToggleSwitch(Graphics g, Rectangle r, bool isOn, bool isHover, Color onColor)
-        {
-            Color track = isOn ? onColor : (_isDarkMode ? Color.FromArgb(255, 65, 75, 90) : Color.FromArgb(255, 215, 222, 230));
-            using (GraphicsPath sp = VectorIcons.CreateRoundedRect(new RectangleF(r.X, r.Y, r.Width, r.Height), r.Height * 0.5f))
-            {
-                using (SolidBrush tb = new SolidBrush(track))
-                {
-                    g.FillPath(tb, sp);
-                }
-            }
+                case "redbauble":
+                case "goldbauble":
+                    bool isRed = (id == "redbauble");
+                    Color mainC = isRed ? Color.FromArgb(235, 35, 50) : Color.FromArgb(255, 195, 20);
+                    Color darkC = isRed ? Color.FromArgb(120, 15, 25) : Color.FromArgb(160, 110, 10);
+                    using (SolidBrush cap = new SolidBrush(Color.FromArgb(255, 250, 210, 80)))
+                    {
+                        g.FillRectangle(cap, cx - 3f, cy - r + 1f, 6f, 3.5f);
+                    }
+                    using (GraphicsPath bp = new GraphicsPath())
+                    {
+                        bp.AddEllipse(cx - r * 0.75f, cy - r * 0.75f + 3f, r * 1.5f, r * 1.5f);
+                        using (PathGradientBrush pgb = new PathGradientBrush(bp))
+                        {
+                            pgb.CenterPoint = new PointF(cx - r * 0.25f, cy - r * 0.25f + 3f);
+                            pgb.CenterColor = Color.White;
+                            pgb.SurroundColors = new Color[] { mainC };
+                            g.FillPath(pgb, bp);
+                        }
+                    }
+                    break;
 
-            int thumbR = r.Height - 6;
-            int thumbX = isOn ? (r.Right - thumbR - 3) : (r.X + 3);
-            int thumbY = r.Y + 3;
+                case "star":
+                    using (SolidBrush glow = new SolidBrush(Color.FromArgb(70, 255, 215, 0)))
+                    {
+                        g.FillEllipse(glow, cx - r * 1.1f, cy - r * 1.1f, r * 2.2f, r * 2.2f);
+                    }
+                    ChristmasManager.DrawStarPolygon(g, cx, cy, r * 0.9f, r * 0.42f, Color.FromArgb(255, 255, 235, 80), Color.FromArgb(255, 245, 160, 20));
+                    break;
 
-            using (SolidBrush thumbB = new SolidBrush(Color.White))
-            {
-                g.FillEllipse(thumbB, thumbX, thumbY, thumbR, thumbR);
+                case "wreath":
+                    using (Pen wp = new Pen(Color.FromArgb(255, 34, 160, 68), 5.5f))
+                    {
+                        g.DrawEllipse(wp, cx - r * 0.65f, cy - r * 0.65f, r * 1.3f, r * 1.3f);
+                    }
+                    using (Pen wp2 = new Pen(Color.FromArgb(255, 60, 205, 95), 2.5f))
+                    {
+                        g.DrawEllipse(wp2, cx - r * 0.65f, cy - r * 0.65f, r * 1.3f, r * 1.3f);
+                    }
+                    // Tiny red berry dots around wreath
+                    using (SolidBrush bDot = new SolidBrush(Color.FromArgb(245, 35, 50)))
+                    {
+                        g.FillEllipse(bDot, cx - 8f, cy - 8f, 3.5f, 3.5f);
+                        g.FillEllipse(bDot, cx + 5f, cy - 8f, 3.5f, 3.5f);
+                        g.FillEllipse(bDot, cx - 11f, cy + 1f, 3.5f, 3.5f);
+                        g.FillEllipse(bDot, cx + 8f, cy + 1f, 3.5f, 3.5f);
+                    }
+                    using (SolidBrush bow = new SolidBrush(Color.FromArgb(235, 35, 50)))
+                    {
+                        g.FillEllipse(bow, cx - 6f, cy + r * 0.45f, 12f, 7f);
+                    }
+                    break;
+
+                case "stocking":
+                    using (SolidBrush sock = new SolidBrush(Color.FromArgb(235, 35, 50)))
+                    {
+                        g.FillRectangle(sock, cx - 6f, cy - 10f, 10f, 16f);
+                        g.FillEllipse(sock, cx - 8f, cy - 1f, 16f, 13f);
+                    }
+                    using (SolidBrush cuff = new SolidBrush(Color.White))
+                    {
+                        g.FillRectangle(cuff, cx - 8f, cy - 13f, 14f, 6f);
+                        // Fluffy toe / heel
+                        g.FillEllipse(cuff, cx - 8f, cy + 4f, 6f, 6f);
+                    }
+                    break;
+
+                case "candycane":
+                    using (Pen cp = new Pen(Color.FromArgb(235, 35, 50), 5.5f))
+                    {
+                        cp.StartCap = LineCap.Round;
+                        cp.EndCap = LineCap.Round;
+                        GraphicsPath ccp = new GraphicsPath();
+                        ccp.AddArc(cx - 4f, cy - 13f, 12f, 12f, 180, 180);
+                        ccp.AddLine(cx - 4f, cy - 7f, cx - 4f, cy + 11f);
+                        g.DrawPath(cp, ccp);
+                    }
+                    // Crisp white diagonal stripes
+                    using (Pen sp = new Pen(Color.White, 2.2f))
+                    {
+                        g.DrawLine(sp, cx - 6f, cy + 8f, cx - 2f, cy + 5f);
+                        g.DrawLine(sp, cx - 6f, cy + 2f, cx - 2f, cy - 1f);
+                        g.DrawLine(sp, cx - 6f, cy - 4f, cx - 2f, cy - 7f);
+                        g.DrawLine(sp, cx - 2f, cy - 12f, cx + 2f, cy - 13f);
+                        g.DrawLine(sp, cx + 5f, cy - 11f, cx + 8f, cy - 8f);
+                    }
+                    break;
+
+                case "gift":
+                    using (SolidBrush gb = new SolidBrush(Color.FromArgb(235, 35, 50)))
+                    {
+                        g.FillRectangle(gb, cx - 11f, cy - 7f, 22f, 18f);
+                    }
+                    using (SolidBrush rib = new SolidBrush(Color.FromArgb(255, 215, 0)))
+                    {
+                        g.FillRectangle(rib, cx - 3f, cy - 7f, 6f, 18f);
+                        g.FillRectangle(rib, cx - 11f, cy, 22f, 5f);
+                        g.FillEllipse(rib, cx - 6f, cy - 12f, 12f, 6f);
+                    }
+                    break;
+
+                case "bells":
+                    using (SolidBrush bell = new SolidBrush(Color.FromArgb(255, 215, 0)))
+                    {
+                        g.FillEllipse(bell, cx - 11f, cy - 6f, 11f, 15f);
+                        g.FillEllipse(bell, cx, cy - 6f, 11f, 15f);
+                    }
+                    using (SolidBrush clap = new SolidBrush(Color.FromArgb(235, 160, 20)))
+                    {
+                        g.FillEllipse(clap, cx - 8f, cy + 5f, 4f, 4f);
+                        g.FillEllipse(clap, cx + 4f, cy + 5f, 4f, 4f);
+                    }
+                    using (SolidBrush bow = new SolidBrush(Color.FromArgb(235, 35, 50)))
+                    {
+                        g.FillEllipse(bow, cx - 6f, cy - 10f, 12f, 7f);
+                    }
+                    break;
+
+                case "gingerbread":
+                    using (SolidBrush gman = new SolidBrush(Color.FromArgb(205, 130, 60)))
+                    {
+                        g.FillEllipse(gman, cx - 5f, cy - 13f, 10f, 10f);
+                        g.FillRectangle(gman, cx - 4f, cy - 4f, 8f, 13f);
+                        g.FillRectangle(gman, cx - 11f, cy - 2f, 22f, 5f);
+                        g.FillRectangle(gman, cx - 6f, cy + 7f, 4f, 7f);
+                        g.FillRectangle(gman, cx + 2f, cy + 7f, 4f, 7f);
+                    }
+                    using (SolidBrush icing = new SolidBrush(Color.White))
+                    {
+                        g.FillEllipse(icing, cx - 1.5f, cy - 1f, 3f, 3f);
+                        g.FillEllipse(icing, cx - 1.5f, cy + 3f, 3f, 3f);
+                    }
+                    break;
+
+                case "holly":
+                    using (SolidBrush leaf = new SolidBrush(Color.FromArgb(34, 160, 68)))
+                    {
+                        g.FillEllipse(leaf, cx - 12f, cy - 8f, 12f, 10f);
+                        g.FillEllipse(leaf, cx, cy - 8f, 12f, 10f);
+                    }
+                    using (SolidBrush berry = new SolidBrush(Color.Red))
+                    {
+                        g.FillEllipse(berry, cx - 4f, cy - 3f, 5f, 5f);
+                        g.FillEllipse(berry, cx + 1f, cy - 3f, 5f, 5f);
+                        g.FillEllipse(berry, cx - 1.5f, cy + 2f, 5f, 5f);
+                    }
+                    break;
+
+                case "santahat":
+                    PointF[] hpts = new PointF[] {
+                        new PointF(cx + 8f, cy - 12f),
+                        new PointF(cx + 12f, cy + 4f),
+                        new PointF(cx - 12f, cy + 4f)
+                    };
+                    using (SolidBrush hat = new SolidBrush(Color.FromArgb(235, 35, 50)))
+                    {
+                        g.FillPolygon(hat, hpts);
+                    }
+                    using (SolidBrush fluff = new SolidBrush(Color.White))
+                    {
+                        g.FillRectangle(fluff, cx - 14f, cy + 4f, 28f, 6f);
+                        g.FillEllipse(fluff, cx + 6f, cy - 15f, 7f, 7f);
+                    }
+                    break;
+
+                case "snowglobe":
+                    using (SolidBrush baseB = new SolidBrush(Color.FromArgb(160, 95, 45)))
+                    {
+                        g.FillRectangle(baseB, cx - 10f, cy + 6f, 20f, 7f);
+                    }
+                    using (SolidBrush glass = new SolidBrush(Color.FromArgb(160, 190, 230, 255)))
+                    {
+                        g.FillEllipse(glass, cx - 11f, cy - 11f, 22f, 22f);
+                    }
+                    using (SolidBrush miniT = new SolidBrush(Color.FromArgb(34, 160, 68)))
+                    {
+                        g.FillPolygon(miniT, new PointF[] { new PointF(cx, cy - 7f), new PointF(cx + 5f, cy + 3f), new PointF(cx - 5f, cy + 3f) });
+                    }
+                    using (SolidBrush snowF = new SolidBrush(Color.White))
+                    {
+                        g.FillEllipse(snowF, cx - 8f, cy + 3f, 16f, 4f);
+                        g.FillEllipse(snowF, cx - 6f, cy - 5f, 2f, 2f);
+                        g.FillEllipse(snowF, cx + 5f, cy - 3f, 2f, 2f);
+                    }
+                    break;
+
+                case "cocoa":
+                    using (SolidBrush mug = new SolidBrush(Color.FromArgb(220, 38, 38)))
+                    {
+                        g.FillRectangle(mug, cx - 8f, cy - 4f, 16f, 16f);
+                    }
+                    using (Pen hand = new Pen(Color.FromArgb(220, 38, 38), 2.5f))
+                    {
+                        g.DrawArc(hand, cx + 5f, cy - 1f, 8f, 10f, 270, 180);
+                    }
+                    using (SolidBrush cream = new SolidBrush(Color.White))
+                    {
+                        g.FillEllipse(cream, cx - 8f, cy - 7f, 16f, 6f);
+                    }
+                    using (Pen steam = new Pen(Color.FromArgb(160, 255, 255, 255), 1.2f))
+                    {
+                        g.DrawArc(steam, cx - 4f, cy - 14f, 4f, 6f, 90, 180);
+                        g.DrawArc(steam, cx + 1f, cy - 15f, 4f, 6f, 270, 180);
+                    }
+                    break;
+
+                case "boat":
+                    // Miniature Boat Icon matching reference
+                    PointF[] bHull = new PointF[] {
+                        new PointF(cx - 15f, cy + 2f),
+                        new PointF(cx + 15f, cy + 2f),
+                        new PointF(cx + 10f, cy + 11f),
+                        new PointF(cx - 10f, cy + 11f)
+                    };
+                    using (SolidBrush bh = new SolidBrush(Color.FromArgb(220, 38, 38)))
+                    {
+                        g.FillPolygon(bh, bHull);
+                    }
+                    using (SolidBrush bDeck = new SolidBrush(Color.FromArgb(250, 245, 235)))
+                    {
+                        g.FillRectangle(bDeck, cx - 14f, cy + 2f, 28f, 3f);
+                    }
+                    using (SolidBrush bDots = new SolidBrush(Color.FromArgb(254, 240, 138)))
+                    {
+                        g.FillEllipse(bDots, cx - 8f, cy + 6f, 3f, 3f);
+                        g.FillEllipse(bDots, cx - 1.5f, cy + 6f, 3f, 3f);
+                        g.FillEllipse(bDots, cx + 5f, cy + 6f, 3f, 3f);
+                    }
+                    using (Pen bMast = new Pen(Color.FromArgb(180, 110, 50), 1.5f))
+                    {
+                        g.DrawLine(bMast, cx + 4f, cy + 2f, cx + 4f, cy - 12f);
+                    }
+                    using (SolidBrush bFlag = new SolidBrush(Color.FromArgb(239, 68, 68)))
+                    {
+                        g.FillPolygon(bFlag, new PointF[] { new PointF(cx + 5f, cy - 12f), new PointF(cx + 12f, cy - 9f), new PointF(cx + 5f, cy - 6f) });
+                    }
+                    using (SolidBrush bTree = new SolidBrush(Color.FromArgb(34, 155, 65)))
+                    {
+                        g.FillPolygon(bTree, new PointF[] { new PointF(cx - 6f, cy - 9f), new PointF(cx - 1f, cy + 2f), new PointF(cx - 11f, cy + 2f) });
+                    }
+                    break;
             }
         }
 
@@ -409,83 +679,48 @@ namespace BoWeather
                     return;
                 }
 
-                // Swatches
-                for (int i = 0; i < 4; i++)
+                Rectangle screen = Screen.PrimaryScreen.WorkingArea;
+                int floorY = screen.Bottom;
+
+                // 1. Click Hero Card (Plant Christmas Tree)
+                if (_heroCardRect.Contains(e.Location))
                 {
-                    if (_giftSwatchRects[i].Contains(e.Location))
+                    // If it isn't snowing, turn snow on!
+                    if (_overlay != null && _overlay.Particles != null)
                     {
-                        _selectedGiftColor = i;
+                        if (_overlay.Particles.CurrentEffect != EffectType.Snow || _overlay.IsPaused)
+                        {
+                            _overlay.IsPaused = false;
+                            _overlay.Particles.SwitchEffect(EffectType.Snow);
+                        }
+                    }
+
+                    float spawnX = screen.Left + screen.Width * 0.72f;
+                    float spawnY = floorY - 6f;
+                    if (_mgr.Trees.Count > 0)
+                    {
+                        spawnX = screen.Left + screen.Width * 0.45f + (_mgr.Trees.Count * 65f) % (screen.Width * 0.4f);
+                    }
+                    _mgr.AddTree(spawnX, spawnY);
+                    _overlay.Particles.SpawnSnowPuff(spawnX, spawnY, 16);
+                    Invalidate();
+                    return;
+                }
+
+                // 2. Click Grid Tiles
+                for (int i = 0; i < TOTAL_TILES; i++)
+                {
+                    if (_tileRects[i].Contains(e.Location))
+                    {
+                        string id = _tileIds[i];
+                        HandleTileClick(id, screen, floorY);
                         Invalidate();
                         return;
                     }
                 }
 
-                Rectangle screen = Screen.PrimaryScreen.WorkingArea;
-                int floorY = screen.Bottom;
-
-                // 1. Add Tree
-                if (_btnTreeAddRect.Contains(e.Location))
-                {
-                    float spawnX = screen.Left + screen.Width * 0.72f;
-                    float spawnY = floorY - 6f;
-                    if (_mgr.Trees.Count > 0)
-                    {
-                        spawnX = screen.Left + screen.Width * 0.50f + (_mgr.Trees.Count * 60f) % (screen.Width * 0.4f);
-                    }
-                    _mgr.AddTree(spawnX, spawnY);
-                    _overlay.Particles.SpawnSnowPuff(spawnX, spawnY, 15);
-                    Invalidate();
-                    return;
-                }
-
-                // 2. Add Lights (String Lights only, NO star attached!)
-                if (_btnLightsAddRect.Contains(e.Location))
-                {
-                    float x1 = screen.Left + screen.Width * 0.28f;
-                    float y1 = screen.Top + screen.Height * 0.30f + (_mgr.Lights.Count * 70f) % (screen.Height * 0.3f);
-                    float x2 = screen.Left + screen.Width * 0.72f;
-                    float y2 = y1;
-                    _mgr.AddLights(x1, y1, x2, y2);
-                    _overlay.Particles.SpawnSnowPuff((x1 + x2) * 0.5f, y1, 15);
-                    Invalidate();
-                    return;
-                }
-
-                // 3. Add Star (Independent golden Christmas star!)
-                if (_btnStarAddRect.Contains(e.Location))
-                {
-                    float spawnX = screen.Left + screen.Width * 0.50f + (_mgr.Stars.Count * 50f) % (screen.Width * 0.3f);
-                    float spawnY = screen.Top + screen.Height * 0.25f + (_mgr.Stars.Count * 40f) % (screen.Height * 0.25f);
-                    _mgr.AddStar(spawnX, spawnY);
-                    _overlay.Particles.SpawnSnowPuff(spawnX, spawnY, 12);
-                    Invalidate();
-                    return;
-                }
-
-                // 4. Add Gift
-                if (_btnGiftAddRect.Contains(e.Location))
-                {
-                    float spawnX = screen.Left + screen.Width * 0.60f + (_mgr.Gifts.Count * 45f) % (screen.Width * 0.3f);
-                    float spawnY = floorY - 6f;
-                    Color boxCol = _giftBoxColors[_selectedGiftColor];
-                    Color ribCol = _giftRibbonColors[_selectedGiftColor];
-                    _mgr.AddGift(spawnX, spawnY, boxCol, ribCol);
-                    _overlay.Particles.SpawnSnowPuff(spawnX, spawnY, 10);
-                    Invalidate();
-                    return;
-                }
-
-                // 5. Toggle Santa Hat
-                if (_cardHatRect.Contains(e.Location))
-                {
-                    _mgr.ShowSantaHat = !_mgr.ShowSantaHat;
-                    _mgr.SaveSettings();
-                    Invalidate();
-                    return;
-                }
-
-                // 6. Toggle Behind Windows (Option 1)
-                if (_cardBehindRect.Contains(e.Location))
+                // 3. Click Behind Windows Toggle
+                if (_behindToggleRect.Contains(e.Location))
                 {
                     _mgr.BehindActiveWindows = !_mgr.BehindActiveWindows;
                     _mgr.SaveSettings();
@@ -493,28 +728,70 @@ namespace BoWeather
                     return;
                 }
 
-                // 7. Clear All
-                if (_btnClearAllRect.Contains(e.Location))
+                // 4. Click Take All Down
+                if (_btnTakeAllDownRect.Contains(e.Location))
                 {
                     _mgr.ClearAll();
+                    _overlay.Particles.SpawnSnowPuff(screen.Left + screen.Width * 0.5f, floorY - 20f, 25);
                     Invalidate();
                     return;
                 }
 
-                // 8. Close Bottom
-                if (_btnCloseBottomRect.Contains(e.Location))
-                {
-                    Close();
-                    return;
-                }
-
-                // Drag window from header
-                if (_headerRect.Contains(e.Location))
+                // Drag form from header or empty area
+                if (e.Y < _heroCardRect.Y || e.Y > _footerRect.Y)
                 {
                     _isDraggingForm = true;
                     _dragStartCursor = Cursor.Position;
                     _dragStartFormPos = Location;
                 }
+            }
+        }
+
+        private void HandleTileClick(string id, Rectangle screen, int floorY)
+        {
+            float rndOffset = (_mgr.TotalItemCount * 55f) % (screen.Width * 0.35f);
+
+            switch (id)
+            {
+                case "lights":
+                    float x1 = screen.Left + screen.Width * 0.28f;
+                    float y1 = screen.Top + screen.Height * 0.30f + (_mgr.Lights.Count * 70f) % (screen.Height * 0.3f);
+                    float x2 = screen.Left + screen.Width * 0.72f;
+                    float y2 = y1;
+                    _mgr.AddLights(x1, y1, x2, y2);
+                    _overlay.Particles.SpawnSnowPuff((x1 + x2) * 0.5f, y1, 15);
+                    break;
+
+                case "star":
+                    float sx = screen.Left + screen.Width * 0.50f + rndOffset;
+                    float sy = screen.Top + screen.Height * 0.25f + (_mgr.Stars.Count * 40f) % (screen.Height * 0.25f);
+                    _mgr.AddStar(sx, sy);
+                    _overlay.Particles.SpawnSnowPuff(sx, sy, 12);
+                    break;
+
+                case "gift":
+                    float gx = screen.Left + screen.Width * 0.60f + rndOffset;
+                    float gy = floorY - 6f;
+                    _giftColorIdx = (_giftColorIdx + 1) % _giftColors.Length;
+                    _mgr.AddGift(gx, gy, _giftColors[_giftColorIdx], _ribbonColors[_giftColorIdx]);
+                    _overlay.Particles.SpawnSnowPuff(gx, gy, 10);
+                    break;
+
+                case "santahat":
+                    _mgr.ShowSantaHat = !_mgr.ShowSantaHat;
+                    _mgr.SaveSettings();
+                    float hx = screen.Left + screen.Width * 0.5f;
+                    float hy = floorY - 10f;
+                    _overlay.Particles.SpawnSnowPuff(hx, hy, 12);
+                    break;
+
+                default:
+                    // Any general ornament (candle, redbauble, goldbauble, wreath, stocking, candycane, bells, gingerbread, holly, snowglobe, cocoa, boat)
+                    float ox = screen.Left + screen.Width * 0.40f + rndOffset;
+                    float oy = floorY - 6f;
+                    _mgr.AddOrnament(id, ox, oy);
+                    _overlay.Particles.SpawnSnowPuff(ox, oy, 12);
+                    break;
             }
         }
 
@@ -538,37 +815,25 @@ namespace BoWeather
             bool hc = _closeBtnRect.Contains(e.Location);
             if (hc != _hoverClose) { _hoverClose = hc; needRepaint = true; }
 
-            // Hover card
-            int hcIdx = -1;
-            if (_cardTreeRect.Contains(e.Location)) hcIdx = 0;
-            else if (_cardLightsRect.Contains(e.Location)) hcIdx = 1;
-            else if (_cardStarRect.Contains(e.Location)) hcIdx = 2;
-            else if (_cardGiftRect.Contains(e.Location)) hcIdx = 3;
-            else if (_cardHatRect.Contains(e.Location)) hcIdx = 4;
-            else if (_cardBehindRect.Contains(e.Location)) hcIdx = 5;
+            // Hover hero
+            bool hh = _heroCardRect.Contains(e.Location);
+            if (hh != _hoverHero) { _hoverHero = hh; needRepaint = true; }
 
-            if (hcIdx != _hoveredCard) { _hoveredCard = hcIdx; needRepaint = true; }
-
-            // Hover action buttons
-            int haIdx = -1;
-            if (_btnTreeAddRect.Contains(e.Location)) haIdx = 0;
-            else if (_btnLightsAddRect.Contains(e.Location)) haIdx = 1;
-            else if (_btnStarAddRect.Contains(e.Location)) haIdx = 2;
-            else if (_btnGiftAddRect.Contains(e.Location)) haIdx = 3;
-            else if (_toggleHatRect.Contains(e.Location)) haIdx = 4;
-            else if (_toggleBehindRect.Contains(e.Location)) haIdx = 5;
-            else if (_btnClearAllRect.Contains(e.Location)) haIdx = 6;
-            else if (_btnCloseBottomRect.Contains(e.Location)) haIdx = 7;
-
-            if (haIdx != _hoveredAction) { _hoveredAction = haIdx; needRepaint = true; }
-
-            // Hover swatch
-            int hsIdx = -1;
-            for (int i = 0; i < 4; i++)
+            // Hover tiles
+            int ht = -1;
+            for (int i = 0; i < TOTAL_TILES; i++)
             {
-                if (_giftSwatchRects[i].Contains(e.Location)) { hsIdx = i; break; }
+                if (_tileRects[i].Contains(e.Location)) { ht = i; break; }
             }
-            if (hsIdx != _hoveredSwatch) { _hoveredSwatch = hsIdx; needRepaint = true; }
+            if (ht != _hoveredTile) { _hoveredTile = ht; needRepaint = true; }
+
+            // Hover Take all down
+            bool hta = _btnTakeAllDownRect.Contains(e.Location);
+            if (hta != _hoverTakeAll) { _hoverTakeAll = hta; needRepaint = true; }
+
+            // Hover behind toggle
+            bool hb = _behindToggleRect.Contains(e.Location);
+            if (hb != _hoverBehind) { _hoverBehind = hb; needRepaint = true; }
 
             if (needRepaint) Invalidate();
         }
@@ -579,21 +844,16 @@ namespace BoWeather
             _isDraggingForm = false;
         }
 
-        protected override void OnDeactivate(EventArgs e)
-        {
-            base.OnDeactivate(e);
-        }
-
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                if (_titleFont != null) _titleFont.Dispose();
-                if (_subFont != null) _subFont.Dispose();
-                if (_labelFont != null) _labelFont.Dispose();
-                if (_descFont != null) _descFont.Dispose();
+                if (_guideFont != null) _guideFont.Dispose();
+                if (_heroTitleFont != null) _heroTitleFont.Dispose();
+                if (_heroSubFont != null) _heroSubFont.Dispose();
+                if (_tileLabelFont != null) _tileLabelFont.Dispose();
+                if (_footerCountFont != null) _footerCountFont.Dispose();
                 if (_btnFont != null) _btnFont.Dispose();
-                if (_hintFont != null) _hintFont.Dispose();
             }
             base.Dispose(disposing);
         }
