@@ -96,6 +96,7 @@ namespace BoWeather
 
             Size = new Size(440, 640);
             BackColor = Color.FromArgb(18, 22, 34);
+            Opacity = 0.95;
 
             // Clip exact rounded corners so zero white pixels peek through
             UpdateRegion();
@@ -212,7 +213,10 @@ namespace BoWeather
 
             // 2. Header Area
             // Cute 3D Tree Icon on left of header
-            DrawMiniTree(g, _headerIconRect.X + 18f, _headerIconRect.Y + 34f, 28f, 36f);
+            if (!ChristmasAssets.DrawTreeHeader(g, _headerIconRect.X + 18f, _headerIconRect.Y + 22f, 32f, 38f))
+            {
+                DrawMiniTree(g, _headerIconRect.X + 18f, _headerIconRect.Y + 34f, 28f, 36f);
+            }
 
             // Title: Christmas Decorations
             using (SolidBrush tb = new SolidBrush(Color.White))
@@ -253,7 +257,10 @@ namespace BoWeather
             }
 
             // 3D Tree preview inside hero card
-            Draw3DTreePreview(g, _heroCardRect.X + 40f, _heroCardRect.Y + 54f, 44f, 58f);
+            if (!ChristmasAssets.DrawTreeHero(g, _heroCardRect.X + 40f, _heroCardRect.Y + 39f, 48f, 58f))
+            {
+                Draw3DTreePreview(g, _heroCardRect.X + 40f, _heroCardRect.Y + 54f, 44f, 58f);
+            }
 
             // Tree labels
             int heroTextX = _heroCardRect.X + 76;
@@ -311,7 +318,10 @@ namespace BoWeather
                 // 3D Tile Icon in upper area
                 float iconCx = tr.X + tr.Width * 0.5f;
                 float iconCy = tr.Y + 34;
-                Draw3DIcon(g, id, iconCx, iconCy);
+                if (!ChristmasAssets.DrawIcon(g, id, iconCx, iconCy, 46f, 46f))
+                {
+                    Draw3DIcon(g, id, iconCx, iconCy);
+                }
 
                 // Tile Label in lower area
                 using (SolidBrush lb = new SolidBrush(Color.FromArgb(240, 245, 255)))
@@ -1117,16 +1127,8 @@ namespace BoWeather
                     _overlay.Particles.SpawnSnowPuff(gx, gy, 10);
                     break;
 
-                case "santahat":
-                    _mgr.ShowSantaHat = !_mgr.ShowSantaHat;
-                    _mgr.SaveSettings();
-                    float hx = screen.Left + screen.Width * 0.5f;
-                    float hy = floorY - 10f;
-                    _overlay.Particles.SpawnSnowPuff(hx, hy, 12);
-                    break;
-
                 default:
-                    // Any general ornament (candle, redbauble, goldbauble, wreath, stocking, candycane, bells, gingerbread, holly, snowglobe, cocoa, boat)
+                    // Any general ornament (candle, redbauble, goldbauble, wreath, stocking, candycane, bells, gingerbread, holly, santahat, snowglobe, cocoa, boat)
                     float ox = screen.Left + screen.Width * 0.40f + rndOffset;
                     float oy = screen.Top + screen.Height * 0.48f + ((_mgr.Ornaments.Count * 22f) % (screen.Height * 0.22f));
                     _mgr.AddOrnament(id, ox, oy);

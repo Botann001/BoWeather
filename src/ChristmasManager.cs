@@ -837,17 +837,20 @@ namespace BoWeather
             Type = type;
             X = x;
             Y = y;
-            if (type == "wreath" || type == "snowglobe") { Width = 44f; Height = 44f; }
-            else if (type == "boat") { Width = 48f; Height = 44f; }
-            else if (type == "candycane") { Width = 32f; Height = 48f; }
-            else if (type == "stocking") { Width = 36f; Height = 46f; }
-            else if (type == "candle") { Width = 32f; Height = 48f; }
-            else if (type == "cocoa") { Width = 42f; Height = 40f; }
-            else if (type == "bells") { Width = 42f; Height = 42f; }
-            else if (type == "gingerbread") { Width = 38f; Height = 46f; }
-            else if (type == "holly") { Width = 42f; Height = 36f; }
-            else if (type == "santahat") { Width = 42f; Height = 38f; }
-            else { Width = 38f; Height = 42f; }
+            if (type == "wreath" || type == "snowglobe") { Width = 52f; Height = 52f; }
+            else if (type == "boat") { Width = 54f; Height = 50f; }
+            else if (type == "candycane") { Width = 40f; Height = 52f; }
+            else if (type == "stocking") { Width = 42f; Height = 52f; }
+            else if (type == "candle") { Width = 40f; Height = 52f; }
+            else if (type == "cocoa") { Width = 48f; Height = 48f; }
+            else if (type == "bells") { Width = 50f; Height = 48f; }
+            else if (type == "gingerbread") { Width = 48f; Height = 52f; }
+            else if (type == "holly") { Width = 52f; Height = 46f; }
+            else if (type == "santahat") { Width = 50f; Height = 46f; }
+            else if (type == "redbauble" || type == "goldbauble") { Width = 46f; Height = 52f; }
+            else if (type == "star") { Width = 52f; Height = 52f; }
+            else if (type == "gift") { Width = 48f; Height = 48f; }
+            else { Width = 48f; Height = 48f; }
         }
 
         public RectangleF GetBounds()
@@ -888,6 +891,11 @@ namespace BoWeather
 
         private static void DrawOrnamentGraphic(Graphics g, string type, float cx, float cy, float w, float h, float animTick)
         {
+            if (ChristmasAssets.DrawIcon(g, type, cx, cy, w, h))
+            {
+                return;
+            }
+
             float r = Math.Min(w, h) * 0.5f;
             switch (type)
             {
