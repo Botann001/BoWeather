@@ -921,47 +921,89 @@ namespace BoWeather.Particles
             if (Christmas != null && Christmas.ShowSantaHat)
             {
                 float brimW = r3 * 1.55f;
-                float brimH = Math.Max(4.5f, r3 * 0.36f);
+                float brimH = Math.Max(5f, r3 * 0.36f);
                 float brimY = y3 - r3 * 0.82f;
 
-                // Red velvet cap body folding over to the right
-                PointF[] hatCap = new PointF[]
-                {
-                    new PointF(s.X - brimW * 0.44f, brimY),
-                    new PointF(s.X + brimW * 0.44f, brimY),
-                    new PointF(s.X + r3 * 1.05f, brimY - r3 * 0.75f),
-                    new PointF(s.X + r3 * 1.18f, brimY - r3 * 0.40f)
-                };
+                // Red velvet cap body gracefully folding over to the right
+                float tipX = s.X + r3 * 1.15f;
+                float tipY = brimY - r3 * 0.25f;
 
                 using (GraphicsPath hatPath = new GraphicsPath())
                 {
-                    hatPath.AddPolygon(hatCap);
+                    // Left curve up to peak
+                    hatPath.AddBezier(
+                        new PointF(s.X - brimW * 0.44f, brimY - 2f),
+                        new PointF(s.X - brimW * 0.48f, brimY - r3 * 0.85f),
+                        new PointF(s.X - r3 * 0.35f, brimY - r3 * 1.55f),
+                        new PointF(s.X - r3 * 0.05f, brimY - r3 * 1.55f)
+                    );
+
+                    // Right curve drooping down to tip
+                    hatPath.AddBezier(
+                        new PointF(s.X - r3 * 0.05f, brimY - r3 * 1.55f),
+                        new PointF(s.X + r3 * 0.55f, brimY - r3 * 1.55f),
+                        new PointF(tipX + 8f, brimY - r3 * 0.95f),
+                        new PointF(tipX, tipY)
+                    );
+
+                    // Inner fold curve going back to right base of brim
+                    hatPath.AddBezier(
+                        new PointF(tipX, tipY),
+                        new PointF(tipX - 10f, tipY - 16f),
+                        new PointF(s.X + r3 * 0.65f, brimY - r3 * 0.85f),
+                        new PointF(s.X + brimW * 0.44f, brimY - 2f)
+                    );
+                    hatPath.CloseFigure();
+
+                    RectangleF hatBounds = hatPath.GetBounds();
                     using (LinearGradientBrush hatGrad = new LinearGradientBrush(
-                        new PointF(s.X - brimW * 0.5f, brimY - r3),
-                        new PointF(s.X + r3 * 1.2f, brimY),
-                        Color.FromArgb((int)(255 * alpha), 239, 68, 68),
-                        Color.FromArgb((int)(255 * alpha), 185, 28, 28)))
+                        new PointF(hatBounds.Left, hatBounds.Top),
+                        new PointF(hatBounds.Right, hatBounds.Bottom),
+                        Color.FromArgb((int)(255 * alpha), 235, 45, 55),
+                        Color.FromArgb((int)(255 * alpha), 170, 20, 25)))
                     {
                         g.FillPath(hatGrad, hatPath);
                     }
                 }
 
-                // White plush brim
-                using (GraphicsPath brimPath = VectorIcons.CreateRoundedRect(new RectangleF(s.X - brimW * 0.5f, brimY - brimH * 0.5f, brimW, brimH), brimH * 0.5f))
-                using (SolidBrush brimBrush = new SolidBrush(Color.FromArgb((int)(255 * alpha), 255, 255, 255)))
+                // Highlight along hat fold
+                using (GraphicsPath hlPath = new GraphicsPath())
                 {
-                    g.FillPath(brimBrush, brimPath);
+                    hlPath.AddBezier(
+                        new PointF(s.X - brimW * 0.38f, brimY - 6f),
+                        new PointF(s.X - brimW * 0.40f, brimY - r3 * 0.8f),
+                        new PointF(s.X - r3 * 0.25f, brimY - r3 * 1.40f),
+                        new PointF(s.X - r3 * 0.05f, brimY - r3 * 1.40f)
+                    );
+                    using (Pen hlPen = new Pen(Color.FromArgb((int)(65 * alpha), 255, 255, 255), Math.Max(2f, r3 * 0.08f)))
+                    {
+                        g.DrawPath(hlPen, hlPath);
+                    }
+                }
+
+                // White plush brim (curved rounded rectangle)
+                RectangleF brimRect = new RectangleF(s.X - brimW * 0.5f, brimY - brimH * 0.5f, brimW, brimH);
+                using (GraphicsPath brimPath = VectorIcons.CreateRoundedRect(brimRect, brimH * 0.5f))
+                using (LinearGradientBrush brimGrad = new LinearGradientBrush(
+                    new PointF(s.X, brimY - brimH * 0.5f),
+                    new PointF(s.X, brimY + brimH * 0.5f),
+                    Color.FromArgb((int)(255 * alpha), 255, 255, 255),
+                    Color.FromArgb((int)(255 * alpha), 225, 230, 240)))
+                {
+                    g.FillPath(brimGrad, brimPath);
                 }
 
                 // White fluffy pom-pom at tip
-                float pomR = Math.Max(3f, r3 * 0.30f);
-                float pomX = s.X + r3 * 1.18f;
-                float pomY = brimY - r3 * 0.40f;
-                using (SolidBrush pomBrush = new SolidBrush(Color.FromArgb((int)(255 * alpha), 255, 255, 255)))
-                using (Pen pomPen = new Pen(Color.FromArgb((int)(60 * alpha), 180, 190, 200), 1f))
+                float pomR = Math.Max(4f, r3 * 0.32f);
+                using (LinearGradientBrush pomBrush = new LinearGradientBrush(
+                    new PointF(tipX - pomR, tipY - pomR),
+                    new PointF(tipX + pomR, tipY + pomR),
+                    Color.FromArgb((int)(255 * alpha), 255, 255, 255),
+                    Color.FromArgb((int)(255 * alpha), 215, 222, 235)))
+                using (Pen pomPen = new Pen(Color.FromArgb((int)(50 * alpha), 180, 190, 200), 1f))
                 {
-                    g.FillEllipse(pomBrush, pomX - pomR, pomY - pomR, pomR * 2f, pomR * 2f);
-                    g.DrawEllipse(pomPen, pomX - pomR, pomY - pomR, pomR * 2f, pomR * 2f);
+                    g.FillEllipse(pomBrush, tipX - pomR, tipY - pomR, pomR * 2f, pomR * 2f);
+                    g.DrawEllipse(pomPen, tipX - pomR, tipY - pomR, pomR * 2f, pomR * 2f);
                 }
             }
         }
