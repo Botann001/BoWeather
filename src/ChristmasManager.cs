@@ -251,27 +251,21 @@ namespace BoWeather
 
         public void Draw(Graphics g, float animTick)
         {
-            float pulse = (float)(0.76 + 0.24 * Math.Sin(animTick * 2.8f + X * 0.015f));
-            float rOut = Size * 0.5f;
-            float rIn = rOut * 0.42f;
+            float pulse = (float)(0.94 + 0.06 * Math.Sin(animTick * 2.8f + X * 0.015f));
+            float size = Size * pulse;
 
-            // Radiant golden outer halo
-            using (SolidBrush glow1 = new SolidBrush(Color.FromArgb((int)(65 * pulse), 255, 215, 0)))
+            // Draw crisp 3D star asset
+            if (!ChristmasAssets.DrawIcon(g, "star", X, Y, size * 1.15f, size * 1.15f))
             {
-                g.FillEllipse(glow1, X - rOut * 1.8f, Y - rOut * 1.8f, rOut * 3.6f, rOut * 3.6f);
-            }
-            using (SolidBrush glow2 = new SolidBrush(Color.FromArgb((int)(35 * pulse), 255, 245, 170)))
-            {
-                g.FillEllipse(glow2, X - rOut * 2.6f, Y - rOut * 2.6f, rOut * 5.2f, rOut * 5.2f);
+                float rOut = Size * 0.5f;
+                float rIn = rOut * 0.42f;
+                ChristmasManager.DrawStarPolygon(g, X, Y, rOut, rIn, Color.FromArgb(255, 255, 235, 110), Color.FromArgb(255, 235, 145, 20));
             }
 
-            // 3D Shaded Star Polygon
-            ChristmasManager.DrawStarPolygon(g, X, Y, rOut, rIn, Color.FromArgb(255, 255, 235, 110), Color.FromArgb(255, 235, 145, 20));
-
-            // Center sparkle
-            using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(240 * pulse), 255, 255, 255)))
+            // Center sparkle glint
+            using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(220 * pulse), 255, 255, 255)))
             {
-                g.FillEllipse(glint, X - 2.5f, Y - 2.5f, 5f, 5f);
+                g.FillEllipse(glint, X - 2f, Y - 2f, 4f, 4f);
             }
 
             // Delete (X) button on hover
@@ -869,14 +863,6 @@ namespace BoWeather
             float cy = Y - Height * 0.5f;
             float w = Width;
             float h = Height;
-
-            // 0. Soft contact shadow on ground / window
-            float shadowW = w * 0.88f;
-            float shadowH = 10f;
-            using (SolidBrush sb = new SolidBrush(Color.FromArgb(55, 15, 25, 40)))
-            {
-                g.FillEllipse(sb, cx - shadowW * 0.5f, Y - shadowH * 0.55f, shadowW, shadowH);
-            }
 
             // 1. Draw Ornament Graphic
             DrawOrnamentGraphic(g, Type, cx, cy, w, h, animTick);

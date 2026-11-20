@@ -83,34 +83,6 @@ namespace BoWeather
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            // Optional ambient glows for illuminated ornaments
-            if (string.Equals(id, "star", StringComparison.OrdinalIgnoreCase))
-            {
-                using (GraphicsPath gp = new GraphicsPath())
-                {
-                    gp.AddEllipse(cx - w * 0.7f, cy - h * 0.7f, w * 1.4f, h * 1.4f);
-                    using (PathGradientBrush pgb = new PathGradientBrush(gp))
-                    {
-                        pgb.CenterColor = Color.FromArgb(120, 255, 220, 70);
-                        pgb.SurroundColors = new Color[] { Color.FromArgb(0, 255, 200, 30) };
-                        g.FillPath(pgb, gp);
-                    }
-                }
-            }
-            else if (string.Equals(id, "candle", StringComparison.OrdinalIgnoreCase))
-            {
-                using (GraphicsPath gp = new GraphicsPath())
-                {
-                    gp.AddEllipse(cx - w * 0.5f, cy - h * 0.65f, w * 1.0f, h * 0.7f);
-                    using (PathGradientBrush pgb = new PathGradientBrush(gp))
-                    {
-                        pgb.CenterColor = Color.FromArgb(100, 255, 190, 60);
-                        pgb.SurroundColors = new Color[] { Color.FromArgb(0, 255, 170, 40) };
-                        g.FillPath(pgb, gp);
-                    }
-                }
-            }
-
             RectangleF destRect = new RectangleF(cx - w * 0.5f, cy - h * 0.5f, w, h);
             g.DrawImage(img, destRect);
 
