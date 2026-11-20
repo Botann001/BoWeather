@@ -83,7 +83,11 @@ namespace BoWeather
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            RectangleF destRect = new RectangleF(cx - w * 0.5f, cy - h * 0.5f, w, h);
+            // Preserve natural aspect ratio without distortion
+            float scale = Math.Min(w / (float)img.Width, h / (float)img.Height);
+            float drawW = img.Width * scale;
+            float drawH = img.Height * scale;
+            RectangleF destRect = new RectangleF(cx - drawW * 0.5f, cy - drawH * 0.5f, drawW, drawH);
             g.DrawImage(img, destRect);
 
             g.InterpolationMode = oldInterpolation;

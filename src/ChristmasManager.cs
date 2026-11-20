@@ -251,19 +251,19 @@ namespace BoWeather
 
         public void Draw(Graphics g, float animTick)
         {
-            float pulse = (float)(0.94 + 0.06 * Math.Sin(animTick * 2.8f + X * 0.015f));
-            float size = Size * pulse;
+            float size = Size * 1.25f;
 
-            // Draw crisp 3D star asset
-            if (!ChristmasAssets.DrawIcon(g, "star", X, Y, size * 1.15f, size * 1.15f))
+            // Draw crisp 3D star asset (fixed size, stable, no throbbing/pulsing heartbeat)
+            if (!ChristmasAssets.DrawIcon(g, "star", X, Y, size, size))
             {
                 float rOut = Size * 0.5f;
                 float rIn = rOut * 0.42f;
                 ChristmasManager.DrawStarPolygon(g, X, Y, rOut, rIn, Color.FromArgb(255, 255, 235, 110), Color.FromArgb(255, 235, 145, 20));
             }
 
-            // Center sparkle glint
-            using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(220 * pulse), 255, 255, 255)))
+            // Subtle twinkle sparkle at the very center (alpha shimmer only, zero size change)
+            float twinkle = (float)(0.80 + 0.20 * Math.Sin(animTick * 1.6f + X * 0.015f));
+            using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(220 * twinkle), 255, 255, 255)))
             {
                 g.FillEllipse(glint, X - 2f, Y - 2f, 4f, 4f);
             }
@@ -831,20 +831,20 @@ namespace BoWeather
             Type = type;
             X = x;
             Y = y;
-            if (type == "wreath" || type == "snowglobe") { Width = 52f; Height = 52f; }
-            else if (type == "boat") { Width = 54f; Height = 50f; }
-            else if (type == "candycane") { Width = 40f; Height = 52f; }
-            else if (type == "stocking") { Width = 42f; Height = 52f; }
-            else if (type == "candle") { Width = 40f; Height = 52f; }
-            else if (type == "cocoa") { Width = 48f; Height = 48f; }
-            else if (type == "bells") { Width = 50f; Height = 48f; }
-            else if (type == "gingerbread") { Width = 48f; Height = 52f; }
-            else if (type == "holly") { Width = 52f; Height = 46f; }
-            else if (type == "santahat") { Width = 50f; Height = 46f; }
-            else if (type == "redbauble" || type == "goldbauble") { Width = 46f; Height = 52f; }
-            else if (type == "star") { Width = 52f; Height = 52f; }
-            else if (type == "gift") { Width = 48f; Height = 48f; }
-            else { Width = 48f; Height = 48f; }
+            if (type == "wreath" || type == "snowglobe") { Width = 54f; Height = 54f; }
+            else if (type == "boat") { Width = 56f; Height = 50f; }
+            else if (type == "candycane") { Width = 46f; Height = 58f; }
+            else if (type == "stocking") { Width = 46f; Height = 56f; }
+            else if (type == "candle") { Width = 44f; Height = 56f; }
+            else if (type == "cocoa") { Width = 52f; Height = 50f; }
+            else if (type == "bells") { Width = 58f; Height = 50f; }
+            else if (type == "gingerbread") { Width = 50f; Height = 56f; }
+            else if (type == "holly") { Width = 54f; Height = 48f; }
+            else if (type == "santahat") { Width = 54f; Height = 48f; }
+            else if (type == "redbauble" || type == "goldbauble") { Width = 48f; Height = 54f; }
+            else if (type == "star") { Width = 54f; Height = 54f; }
+            else if (type == "gift") { Width = 50f; Height = 50f; }
+            else { Width = 50f; Height = 50f; }
         }
 
         public RectangleF GetBounds()

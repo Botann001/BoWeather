@@ -317,8 +317,8 @@ namespace BoWeather
 
                 // 3D Tile Icon in upper area
                 float iconCx = tr.X + tr.Width * 0.5f;
-                float iconCy = tr.Y + 34;
-                if (!ChristmasAssets.DrawIcon(g, id, iconCx, iconCy, 46f, 46f))
+                float iconCy = tr.Y + 33;
+                if (!ChristmasAssets.DrawIcon(g, id, iconCx, iconCy, 52f, 48f))
                 {
                     Draw3DIcon(g, id, iconCx, iconCy);
                 }
