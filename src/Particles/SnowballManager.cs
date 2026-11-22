@@ -441,6 +441,53 @@ namespace BoWeather.Particles
 
                     float currentSpeed = (float)Math.Sqrt(b.Vx * b.Vx + b.Vy * b.Vy);
 
+                    // 0. Collision with Snowman! (Throwing a snowball at a snowman shatters both in a burst of snow)
+                    Snowball hitSnowman = null;
+                    for (int j = 0; j < _snowballs.Count; j++)
+                    {
+                        if (j == i) continue;
+                        Snowball target = _snowballs[j];
+                        if (target.IsGrabbed || target.IsRolling || target.IsMelting) continue;
+
+                        if (target.BallCount >= 2 || target.IsSnowman)
+                        {
+                            RectangleF hitBox = target.GetBounds();
+                            hitBox.Inflate(Math.Max(14f, b.BaseRadius * 0.85f), Math.Max(14f, b.BaseRadius * 0.85f));
+
+                            PointF p1 = new PointF(b.X, b.Y);
+                            PointF p2 = new PointF(b.X - b.Vx * 0.5f, b.Y - b.Vy * 0.5f);
+                            PointF p3 = new PointF(b.X - b.Vx, b.Y - b.Vy);
+
+                            if (hitBox.Contains(p1) || hitBox.Contains(p2) || hitBox.Contains(p3))
+                            {
+                                hitSnowman = target;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (hitSnowman != null)
+                    {
+                        float hitX = (b.X + hitSnowman.X) * 0.5f;
+                        float hitY = (b.Y + hitSnowman.Y) * 0.5f;
+
+                        // Shatter the snowman into a glorious flurry of snow
+                        ShatterBall(hitSnowman, onSnowPuff);
+
+                        // Shatter the thrown snowball
+                        ShatterBall(b, onSnowPuff);
+
+                        // Dramatic explosion of snow puff particles at the point of impact
+                        if (onSnowPuff != null)
+                        {
+                            onSnowPuff(hitX, hitY, 35);
+                        }
+
+                        if (_snowballs.Count == 0) break;
+                        if (i >= _snowballs.Count) i = _snowballs.Count;
+                        continue;
+                    }
+
                     // 1. Landing on window ledge
                     if (winMgr != null)
                     {
