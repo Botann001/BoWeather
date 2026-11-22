@@ -9,6 +9,17 @@ namespace BoWeather
 {
     public class ChristmasLightsItem
     {
+        private static readonly Color[] BulbPalette = new Color[]
+        {
+            Color.FromArgb(32, 210, 145),
+            Color.FromArgb(42, 193, 225),
+            Color.FromArgb(239, 119, 187),
+            Color.FromArgb(255, 235, 151),
+            Color.FromArgb(181, 112, 244),
+            Color.FromArgb(255, 86, 91),
+            Color.FromArgb(255, 184, 54)
+        };
+
         public float X1;
         public float Y1;
         public float X2;
@@ -91,16 +102,6 @@ namespace BoWeather
 
         public void Draw(Graphics g, float animTick, bool isDarkMode)
         {
-            Color[] bulbPalette = new Color[]
-            {
-                Color.FromArgb(239, 68, 68),   // Crimson Red
-                Color.FromArgb(245, 158, 11),  // Amber Gold
-                Color.FromArgb(16, 185, 129),  // Emerald Green
-                Color.FromArgb(6, 182, 212),   // Sky Cyan
-                Color.FromArgb(236, 72, 153),  // Hot Pink
-                Color.FromArgb(254, 240, 138), // Warm White
-                Color.FromArgb(168, 85, 247)   // Purple
-            };
 
             PointF mid = GetMidpoint();
             float ctrl1X = X1 + (mid.X - X1) * 0.55f;
@@ -117,9 +118,15 @@ namespace BoWeather
                     new PointF(ctrl2X, ctrl2Y),
                     new PointF(X2, Y2));
 
-                using (Pen wirePen = new Pen(Color.FromArgb(200, 25, 45, 30), 2.2f))
+                using (Pen shadowPen = new Pen(Color.FromArgb(65, 10, 23, 18), 3.6f))
+                using (Pen wirePen = new Pen(Color.FromArgb(245, 30, 53, 43), 1.8f))
+                using (Pen highlightPen = new Pen(Color.FromArgb(110, 150, 174, 145), 0.6f))
                 {
+                    shadowPen.StartCap = shadowPen.EndCap = LineCap.Round;
+                    wirePen.StartCap = wirePen.EndCap = LineCap.Round;
+                    g.DrawPath(shadowPen, wirePath);
                     g.DrawPath(wirePen, wirePath);
+                    g.DrawPath(highlightPen, wirePath);
                 }
             }
 
@@ -133,33 +140,9 @@ namespace BoWeather
             {
                 float t = (float)b / bulbCount;
                 PointF pt = GetBezierPoint(t);
-                Color bulbCol = bulbPalette[(b + (int)(X1 * 0.05f)) % bulbPalette.Length];
-                float pulse = (float)(0.68 + 0.32 * Math.Sin(animTick * 3.4f + b * 1.15f + X1 * 0.02f));
-                float r = 5.0f;
-
-                // Socket cap
-                using (SolidBrush capBrush = new SolidBrush(Color.FromArgb(220, 20, 35, 25)))
-                {
-                    g.FillRectangle(capBrush, pt.X - 1.8f, pt.Y - 2.5f, 3.6f, 3.5f);
-                }
-
-                // Bulb glow halo
-                using (SolidBrush halo = new SolidBrush(Color.FromArgb((int)(65 * pulse), bulbCol)))
-                {
-                    g.FillEllipse(halo, pt.X - r * 1.6f, pt.Y - r * 0.4f, r * 3.2f, r * 3.2f);
-                }
-
-                // Teardrop glass bulb
-                using (SolidBrush bulbBrush = new SolidBrush(Color.FromArgb((int)(245 * pulse), bulbCol)))
-                {
-                    g.FillEllipse(bulbBrush, pt.X - r, pt.Y + 0.5f, r * 2f, r * 2.3f);
-                }
-
-                // Center bright sparkle
-                using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(230 * pulse), 255, 255, 255)))
-                {
-                    g.FillEllipse(glint, pt.X - r * 0.45f, pt.Y + r * 0.4f, r * 0.7f, r * 0.7f);
-                }
+                Color bulbCol = BulbPalette[(b - 1) % BulbPalette.Length];
+                float pulse = (float)(0.90 + 0.10 * Math.Sin(animTick * 1.6f + b * 1.15f));
+                DrawBulb(g, pt, bulbCol, pulse, isDarkMode);
             }
 
             // 3. Handles & Delete Button
@@ -185,6 +168,60 @@ namespace BoWeather
                     g.FillEllipse(pinBrush, X1 - 3f, Y1 - 3f, 6f, 6f);
                     g.FillEllipse(pinBrush, X2 - 3f, Y2 - 3f, 6f, 6f);
                 }
+            }
+        }
+
+        private static void DrawBulb(Graphics g, PointF anchor, Color color, float pulse, bool isDarkMode)
+        {
+            float centerY = anchor.Y + 8f;
+            float glowRadius = 14f;
+
+            using (GraphicsPath glowPath = new GraphicsPath())
+            {
+                glowPath.AddEllipse(anchor.X - glowRadius, centerY - glowRadius,
+                    glowRadius * 2f, glowRadius * 2f);
+                using (PathGradientBrush glow = new PathGradientBrush(glowPath))
+                {
+                    glow.CenterPoint = new PointF(anchor.X, centerY);
+                    glow.CenterColor = Color.FromArgb((int)((isDarkMode ? 85 : 60) * pulse), color);
+                    glow.SurroundColors = new Color[] { Color.FromArgb(0, color) };
+                    g.FillPath(glow, glowPath);
+                }
+            }
+
+            using (Pen stem = new Pen(Color.FromArgb(245, 33, 57, 44), 1.5f))
+            using (SolidBrush socket = new SolidBrush(Color.FromArgb(255, 38, 63, 48)))
+            using (Pen socketHighlight = new Pen(Color.FromArgb(155, 139, 159, 115), 0.7f))
+            {
+                g.DrawLine(stem, anchor.X, anchor.Y, anchor.X, anchor.Y + 3f);
+                g.FillRectangle(socket, anchor.X - 2.1f, anchor.Y + 1f, 4.2f, 3.5f);
+                g.DrawLine(socketHighlight, anchor.X - 1.5f, anchor.Y + 1.5f,
+                    anchor.X + 1.5f, anchor.Y + 1.5f);
+            }
+
+            using (GraphicsPath glass = new GraphicsPath())
+            {
+                glass.AddBezier(anchor.X - 2.5f, anchor.Y + 4f,
+                    anchor.X - 7f, anchor.Y + 6f, anchor.X - 5.5f, anchor.Y + 13.5f,
+                    anchor.X, anchor.Y + 14f);
+                glass.AddBezier(anchor.X, anchor.Y + 14f,
+                    anchor.X + 5.5f, anchor.Y + 13.5f, anchor.X + 7f, anchor.Y + 6f,
+                    anchor.X + 2.5f, anchor.Y + 4f);
+                glass.CloseFigure();
+
+                using (PathGradientBrush fill = new PathGradientBrush(glass))
+                {
+                    fill.CenterPoint = new PointF(anchor.X - 1f, anchor.Y + 7f);
+                    fill.CenterColor = Color.FromArgb(255,
+                        Math.Min(255, color.R + 95), Math.Min(255, color.G + 95), Math.Min(255, color.B + 95));
+                    fill.SurroundColors = new Color[] { Color.FromArgb(245, color) };
+                    g.FillPath(fill, glass);
+                }
+            }
+
+            using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(215 * pulse), 255, 255, 235)))
+            {
+                g.FillEllipse(glint, anchor.X - 2f, anchor.Y + 5f, 2.1f, 3.2f);
             }
         }
 

@@ -160,6 +160,70 @@ namespace BoWeather.Particles
             return CreateParticle(randomizeY, _currentEffect);
         }
 
+        private void InitSnowParticle(Particle p)
+        {
+            // Snowflake Variants:
+            // Variant 0: Bokeh Foreground (10%) - soft radial blur, large, slow drift
+            // Variant 1: 6-Arm Dendrite Crystal (20%) - rotating crystalline snowflake with branches
+            // Variant 2: 4-Point Diamond / Cross Crystal (15%) - stellar glint crystal
+            // Variant 3: Fluffy Midground Flake (30%) - glowing halo + crisp core
+            // Variant 4: Distant Snow Dust (25%) - tiny, subtle, slow atmospheric snowfall
+            int roll = _rand.Next(0, 100);
+            if (roll < 10)
+            {
+                p.Variant = 0; // Bokeh Foreground
+                p.Size = (float)(16.0 + _rand.NextDouble() * 14.0);
+                p.BaseVy = (float)(1.5 + _rand.NextDouble() * 1.1);
+                p.FlutterSpeed = (float)(0.015 + _rand.NextDouble() * 0.02);
+                p.AngularSpeed = (float)((_rand.NextDouble() - 0.5) * 0.8);
+                int a = 90 + _rand.Next(0, 50);
+                p.Color = Color.FromArgb(a, 220, 240, 255);
+            }
+            else if (roll < 30)
+            {
+                p.Variant = 1; // 6-Arm Dendrite Crystal
+                p.Size = (float)(8.0 + _rand.NextDouble() * 7.0);
+                p.BaseVy = (float)(1.0 + _rand.NextDouble() * 0.9);
+                p.FlutterSpeed = (float)(0.025 + _rand.NextDouble() * 0.03);
+                p.AngularSpeed = (float)((_rand.NextDouble() - 0.5) * 2.2);
+                int a = 190 + _rand.Next(0, 65);
+                p.Color = Color.FromArgb(a, 255, 255, 255);
+            }
+            else if (roll < 45)
+            {
+                p.Variant = 2; // 4-Point Diamond / Cross Crystal
+                p.Size = (float)(5.5 + _rand.NextDouble() * 4.5);
+                p.BaseVy = (float)(1.1 + _rand.NextDouble() * 1.0);
+                p.FlutterSpeed = (float)(0.025 + _rand.NextDouble() * 0.035);
+                p.AngularSpeed = (float)((_rand.NextDouble() - 0.5) * 2.5);
+                int a = 190 + _rand.Next(0, 65);
+                p.Color = Color.FromArgb(a, 245, 250, 255);
+            }
+            else if (roll < 75)
+            {
+                p.Variant = 3; // Fluffy Midground
+                p.Size = (float)(3.2 + _rand.NextDouble() * 3.3);
+                p.BaseVy = (float)(1.1 + _rand.NextDouble() * 1.2);
+                p.FlutterSpeed = (float)(0.02 + _rand.NextDouble() * 0.03);
+                p.AngularSpeed = (float)((_rand.NextDouble() - 0.5) * 1.5);
+                int a = 180 + _rand.Next(0, 75);
+                p.Color = Color.FromArgb(a, 255, 255, 255);
+            }
+            else
+            {
+                p.Variant = 4; // Distant Snow Dust
+                p.Size = (float)(1.5 + _rand.NextDouble() * 1.8);
+                p.BaseVy = (float)(0.6 + _rand.NextDouble() * 0.6);
+                p.FlutterSpeed = (float)(0.015 + _rand.NextDouble() * 0.02);
+                p.AngularSpeed = 0f;
+                int a = 110 + _rand.Next(0, 70);
+                p.Color = Color.FromArgb(a, 225, 240, 255);
+            }
+
+            p.Vy = p.BaseVy;
+            p.Vx = (float)((_rand.NextDouble() - 0.5) * 0.5);
+        }
+
         private Particle CreateParticle(bool randomizeY, EffectType effect)
         {
             Particle p = new Particle();
@@ -193,12 +257,7 @@ namespace BoWeather.Particles
                     break;
 
                 case EffectType.Snow:
-                    p.Size = (float)(2.8 + _rand.NextDouble() * 4.2);
-                    p.BaseVy = (float)(1.2 + _rand.NextDouble() * 1.8);
-                    p.Vy = p.BaseVy;
-                    p.Vx = (float)((_rand.NextDouble() - 0.5) * 0.6);
-                    int alpha = 190 + _rand.Next(0, 65);
-                    p.Color = Color.FromArgb(alpha, 255, 255, 255);
+                    InitSnowParticle(p);
                     break;
 
                 case EffectType.AutumnLeaves:
@@ -547,6 +606,14 @@ namespace BoWeather.Particles
                     p.X += dynamicWind * 1.8f;
                     p.Y += p.Vy;
                 }
+                else if (p.Effect == EffectType.Snow)
+                {
+                    float swayAmount = (p.Variant == 0) ? 1.4f : ((p.Variant == 1 || p.Variant == 2) ? 1.0f : 0.6f);
+                    float sway = (float)Math.Sin(p.FlutterPhase) * swayAmount;
+                    float windFactor = (p.Variant == 0) ? 1.25f : ((p.Variant == 4) ? 0.75f : 1.0f);
+                    p.X += sway + dynamicWind * windFactor;
+                    p.Y += p.Vy;
+                }
                 else
                 {
                     float sway = (float)Math.Sin(p.FlutterPhase) * (p.Effect == EffectType.AutumnLeaves ? 2.2f : 0.8f);
@@ -863,12 +930,7 @@ namespace BoWeather.Particles
                     break;
 
                 case EffectType.Snow:
-                    p.Size = (float)(2.8 + _rand.NextDouble() * 4.2);
-                    p.BaseVy = (float)(1.2 + _rand.NextDouble() * 1.8);
-                    p.Vy = p.BaseVy;
-                    p.Vx = (float)((_rand.NextDouble() - 0.5) * 0.6);
-                    int alpha = 190 + _rand.Next(0, 65);
-                    p.Color = Color.FromArgb(alpha, 255, 255, 255);
+                    InitSnowParticle(p);
                     break;
 
                 case EffectType.AutumnLeaves:
@@ -1125,17 +1187,141 @@ namespace BoWeather.Particles
         private void DrawSnowflake(Graphics g, Particle p)
         {
             int alpha = (int)(p.Color.A * p.Alpha);
-            if (alpha < 0) alpha = 0;
+            if (alpha <= 0) return;
             if (alpha > 255) alpha = 255;
 
-            float radius = p.Size * 0.5f;
-            using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb((int)(alpha * 0.30f), 220, 240, 255)))
+            // If resting on ledge, render as soft settled snow puff
+            if (p.State == ParticleState.Resting)
             {
-                g.FillEllipse(glowBrush, p.X - radius * 1.5f, p.Y - radius * 1.5f, radius * 3.0f, radius * 3.0f);
+                float r = Math.Max(1.5f, p.Size * 0.45f);
+                using (SolidBrush restBrush = new SolidBrush(Color.FromArgb(alpha, 245, 250, 255)))
+                {
+                    g.FillEllipse(restBrush, p.X - r, p.Y - r * 0.6f, r * 2f, r * 1.2f);
+                }
+                return;
             }
-            using (SolidBrush coreBrush = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
+
+            switch (p.Variant)
             {
-                g.FillEllipse(coreBrush, p.X - radius, p.Y - radius, radius * 2f, radius * 2f);
+                case 0: // Bokeh Foreground (Soft radial gradient blur)
+                    {
+                        float r = p.Size * 0.5f;
+                        RectangleF rect = new RectangleF(p.X - r, p.Y - r, p.Size, p.Size);
+                        if (rect.Width > 1f && rect.Height > 1f)
+                        {
+                            using (GraphicsPath gp = new GraphicsPath())
+                            {
+                                gp.AddEllipse(rect);
+                                using (PathGradientBrush pgb = new PathGradientBrush(gp))
+                                {
+                                    pgb.CenterPoint = new PointF(p.X, p.Y);
+                                    pgb.CenterColor = Color.FromArgb((int)(alpha * 0.85f), 255, 255, 255);
+                                    pgb.SurroundColors = new Color[] { Color.FromArgb(0, 210, 235, 255) };
+                                    g.FillPath(pgb, gp);
+                                }
+                            }
+                        }
+                    }
+                    break;
+
+                case 1: // 6-Arm Dendrite Crystal Snowflake
+                    {
+                        GraphicsState state = g.Save();
+                        g.TranslateTransform(p.X, p.Y);
+                        g.RotateTransform(p.Angle);
+
+                        float r = p.Size * 0.5f;
+                        float penWidth = Math.Max(1.0f, p.Size * 0.11f);
+                        using (Pen pen = new Pen(Color.FromArgb(alpha, 255, 255, 255), penWidth))
+                        {
+                            // 3 diameters = 6 arms
+                            g.DrawLine(pen, 0f, -r, 0f, r);
+                            g.RotateTransform(60f);
+                            g.DrawLine(pen, 0f, -r, 0f, r);
+                            g.RotateTransform(60f);
+                            g.DrawLine(pen, 0f, -r, 0f, r);
+                            g.RotateTransform(-120f); // Reset rotation to initial angle
+
+                            // Branching dendrite needles
+                            if (p.Size >= 7.5f)
+                            {
+                                float brLen = r * 0.38f;
+                                for (int i = 0; i < 6; i++)
+                                {
+                                    float midR = r * 0.52f;
+                                    g.DrawLine(pen, 0f, -midR, -brLen, -midR + brLen * 0.55f);
+                                    g.DrawLine(pen, 0f, -midR, brLen, -midR + brLen * 0.55f);
+                                    g.RotateTransform(60f);
+                                }
+                            }
+                        }
+
+                        // Center core
+                        float coreR = Math.Max(0.8f, r * 0.28f);
+                        using (SolidBrush coreBrush = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
+                        {
+                            g.FillEllipse(coreBrush, -coreR, -coreR, coreR * 2f, coreR * 2f);
+                        }
+
+                        g.Restore(state);
+                    }
+                    break;
+
+                case 2: // 4-Point Diamond / Cross Stellar Crystal
+                    {
+                        GraphicsState state = g.Save();
+                        g.TranslateTransform(p.X, p.Y);
+                        g.RotateTransform(p.Angle);
+
+                        float r = p.Size * 0.5f;
+                        float penWidth = Math.Max(1.0f, p.Size * 0.13f);
+                        using (Pen pen = new Pen(Color.FromArgb(alpha, 245, 250, 255), penWidth))
+                        {
+                            // Main cross arms
+                            g.DrawLine(pen, 0f, -r, 0f, r);
+                            g.DrawLine(pen, -r, 0f, r, 0f);
+
+                            // Shorter diagonal glints
+                            float diagR = r * 0.45f;
+                            g.DrawLine(pen, -diagR, -diagR, diagR, diagR);
+                            g.DrawLine(pen, -diagR, diagR, diagR, -diagR);
+                        }
+
+                        // Bright center core
+                        float coreR = Math.Max(1.0f, r * 0.35f);
+                        using (SolidBrush coreBrush = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
+                        {
+                            g.FillEllipse(coreBrush, -coreR, -coreR, coreR * 2f, coreR * 2f);
+                        }
+
+                        g.Restore(state);
+                    }
+                    break;
+
+                case 3: // Fluffy Midground Snowflake (halo glow + solid core)
+                    {
+                        float radius = p.Size * 0.5f;
+                        using (SolidBrush glowBrush = new SolidBrush(Color.FromArgb((int)(alpha * 0.30f), 215, 235, 255)))
+                        {
+                            g.FillEllipse(glowBrush, p.X - radius * 1.4f, p.Y - radius * 1.4f, radius * 2.8f, radius * 2.8f);
+                        }
+                        using (SolidBrush coreBrush = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
+                        {
+                            g.FillEllipse(coreBrush, p.X - radius, p.Y - radius, radius * 2f, radius * 2f);
+                        }
+                    }
+                    break;
+
+                case 4: // Distant Snow Dust
+                default:
+                    {
+                        float r = Math.Max(0.8f, p.Size * 0.5f);
+                        using (SolidBrush dustBrush = new SolidBrush(Color.FromArgb(alpha, 225, 240, 255)))
+                        {
+                            g.FillEllipse(dustBrush, p.X - r, p.Y - r, r * 2f, r * 2f);
+                        }
+                    }
+                    break;
             }
         }
 
