@@ -529,7 +529,7 @@ namespace BoWeather
             Color xmasBg = _isDarkMode ? Color.FromArgb(200, 20, 80, 48) : Color.FromArgb(240, 220, 248, 230);
             Color xmasHover = _isDarkMode ? Color.FromArgb(250, 28, 105, 62) : Color.FromArgb(255, 200, 240, 215);
             Color xmasFg = _isDarkMode ? Color.White : Color.FromArgb(255, 15, 80, 35);
-            DrawActionButton(g, _btnChristmasRect, "tree", isId ? "🎄 Dekorasi Natal…" : "🎄 Christmas Decor…",
+            DrawActionButton(g, _btnChristmasRect, "tree", isId ? "Dekorasi Natal…" : "Christmas Decor…",
                 xmasBg, xmasFg, _hoveredBtn == 4 ? xmasHover : xmasBg, false);
 
             // 6. Action Buttons 2x2 Grid (Radius 14)
