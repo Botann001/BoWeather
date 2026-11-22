@@ -74,10 +74,36 @@ namespace BoWeather.Particles
         }
     }
 
+    public enum DebrisKind
+    {
+        Shockwave,
+        SnowChunk,
+        CarrotNose,
+        SantaHat,
+        Coal
+    }
+
+    public class ShatterDebris
+    {
+        public DebrisKind Kind;
+        public float X;
+        public float Y;
+        public float Vx;
+        public float Vy;
+        public float Gravity;
+        public float Radius;
+        public float Angle;
+        public float AngularVelocity;
+        public float Alpha;
+        public float Decay;
+        public float MaxRadius;
+    }
+
     public class SnowballManager
     {
         public const float MaxSnowballRadius = 52.0f; // Exactly sized to match the user's reference screenshot (~104px diameter)
         private readonly List<Snowball> _snowballs = new List<Snowball>();
+        private readonly List<ShatterDebris> _debrisList = new List<ShatterDebris>();
         private Snowball _draggedBall = null;
         private Snowball _rollingBall = null;
         private bool _prevMouseDown = false;
@@ -89,12 +115,13 @@ namespace BoWeather.Particles
         private readonly Random _rand = new Random();
 
         public List<Snowball> Snowballs { get { return _snowballs; } }
-        public int Count { get { return _snowballs.Count; } }
+        public int Count { get { return _snowballs.Count + _debrisList.Count; } }
         public ChristmasManager Christmas { get; set; }
 
         public void Clear()
         {
             _snowballs.Clear();
+            _debrisList.Clear();
             _draggedBall = null;
             _rollingBall = null;
             _isCandidateRolling = false;
@@ -155,14 +182,134 @@ namespace BoWeather.Particles
         public void ShatterBall(Snowball b, Action<float, float, int> onSnowPuff)
         {
             if (b == null) return;
+            SpawnShatterDebris(b);
             if (onSnowPuff != null)
             {
-                int count = (b.BallCount >= 3) ? 45 : ((b.BallCount == 2) ? 28 : 18);
+                int count = (b.BallCount >= 3) ? 55 : ((b.BallCount == 2) ? 35 : 20);
                 onSnowPuff(b.X, b.Y, count);
             }
             _snowballs.Remove(b);
             if (_draggedBall == b) _draggedBall = null;
             if (_rollingBall == b) _rollingBall = null;
+        }
+
+        private void SpawnShatterDebris(Snowball b)
+        {
+            float cy = b.Y;
+            if (b.BallCount == 2)
+            {
+                cy = b.Y - b.BaseRadius * 0.5f;
+            }
+            else if (b.BallCount >= 3)
+            {
+                cy = b.Y - b.BaseRadius - b.TorsoRadius * 0.4f;
+            }
+
+            // 1. Shockwave Blast Ring
+            _debrisList.Add(new ShatterDebris
+            {
+                Kind = DebrisKind.Shockwave,
+                X = b.X,
+                Y = cy,
+                Radius = 10f,
+                MaxRadius = (b.BallCount >= 3) ? 125f : ((b.BallCount == 2) ? 90f : 60f),
+                Alpha = 1.0f,
+                Decay = 0.058f
+            });
+
+            // 2. Chunks of 3D Volumetric Snow
+            int chunkCount = (b.BallCount >= 3) ? 36 : ((b.BallCount == 2) ? 22 : 12);
+            for (int i = 0; i < chunkCount; i++)
+            {
+                float angle = (float)(_rand.NextDouble() * Math.PI * 2.0);
+                float speed = (float)(5.0 + _rand.NextDouble() * 11.0);
+                float maxR = (b.BallCount >= 3) ? 15f : ((b.BallCount == 2) ? 11f : 8f);
+                float chunkR = (float)(3.5 + _rand.NextDouble() * (maxR - 3.5f));
+
+                float vx = (float)Math.Cos(angle) * speed;
+                // Explosive upward fountain bias
+                float vy = (float)(Math.Sin(angle) * speed * 0.72 - (3.5 + _rand.NextDouble() * 7.0));
+
+                _debrisList.Add(new ShatterDebris
+                {
+                    Kind = DebrisKind.SnowChunk,
+                    X = b.X + (float)((_rand.NextDouble() - 0.5) * 16.0),
+                    Y = cy + (float)((_rand.NextDouble() - 0.5) * 20.0),
+                    Vx = vx,
+                    Vy = vy,
+                    Gravity = 0.42f,
+                    Radius = chunkR,
+                    Angle = (float)(_rand.NextDouble() * Math.PI * 2.0),
+                    AngularVelocity = (float)((_rand.NextDouble() - 0.5) * 0.35),
+                    Alpha = 1.0f,
+                    Decay = (float)(0.016 + _rand.NextDouble() * 0.015)
+                });
+            }
+
+            // 3. Snowman Accessories Flying Off
+            if (b.BallCount >= 3 || b.IsSnowman)
+            {
+                float overlap12 = Math.Max(2f, Math.Min(b.BaseRadius, b.TorsoRadius) * 0.18f);
+                float overlap23 = Math.Max(2f, Math.Min(b.TorsoRadius, b.HeadRadius) * 0.18f);
+                float y2 = b.Y - b.BaseRadius - b.TorsoRadius + overlap12;
+                float y3 = y2 - b.TorsoRadius - b.HeadRadius + overlap23;
+
+                // Flying Carrot Nose
+                _debrisList.Add(new ShatterDebris
+                {
+                    Kind = DebrisKind.CarrotNose,
+                    X = b.X,
+                    Y = y3 + b.HeadRadius * 0.06f,
+                    Vx = (float)(5.5 + _rand.NextDouble() * 7.0),
+                    Vy = (float)(-7.0 - _rand.NextDouble() * 6.0),
+                    Gravity = 0.44f,
+                    Radius = Math.Max(6f, b.HeadRadius * 0.45f),
+                    Angle = 0f,
+                    AngularVelocity = 0.38f,
+                    Alpha = 1.0f,
+                    Decay = 0.018f
+                });
+
+                // Flying Santa Hat
+                if (Christmas != null && Christmas.ShowSantaHat)
+                {
+                    _debrisList.Add(new ShatterDebris
+                    {
+                        Kind = DebrisKind.SantaHat,
+                        X = b.X,
+                        Y = y3 - b.HeadRadius * 0.8f,
+                        Vx = (float)((_rand.NextDouble() - 0.5) * 6.5),
+                        Vy = (float)(-9.0 - _rand.NextDouble() * 6.0),
+                        Gravity = 0.38f,
+                        Radius = Math.Max(12f, b.HeadRadius * 0.85f),
+                        Angle = 0f,
+                        AngularVelocity = 0.16f,
+                        Alpha = 1.0f,
+                        Decay = 0.016f
+                    });
+                }
+
+                // 7 Coal pieces scattering
+                for (int c = 0; c < 7; c++)
+                {
+                    float cAngle = (float)(_rand.NextDouble() * Math.PI * 2.0);
+                    float cSpeed = (float)(4.0 + _rand.NextDouble() * 8.0);
+                    _debrisList.Add(new ShatterDebris
+                    {
+                        Kind = DebrisKind.Coal,
+                        X = b.X + (float)((_rand.NextDouble() - 0.5) * 12.0),
+                        Y = (c < 4) ? y3 : y2,
+                        Vx = (float)Math.Cos(cAngle) * cSpeed,
+                        Vy = (float)(Math.Sin(cAngle) * cSpeed * 0.65 - (2.5 + _rand.NextDouble() * 5.0)),
+                        Gravity = 0.48f,
+                        Radius = (float)(2.2 + _rand.NextDouble() * 1.6),
+                        Angle = 0f,
+                        AngularVelocity = (float)((_rand.NextDouble() - 0.5) * 0.4),
+                        Alpha = 1.0f,
+                        Decay = 0.017f
+                    });
+                }
+            }
         }
 
         public void OnMouseMove(float mouseX, float mouseY, WindowManager winMgr, int screenWidth, int floorY, Action<float, float, int> onSnowPuff)
@@ -574,6 +721,135 @@ namespace BoWeather.Particles
                     }
                 }
             }
+
+            UpdateDebris(floorY);
+        }
+
+        private void UpdateDebris(int floorY)
+        {
+            for (int i = _debrisList.Count - 1; i >= 0; i--)
+            {
+                ShatterDebris d = _debrisList[i];
+                d.Alpha -= d.Decay;
+                if (d.Alpha <= 0f)
+                {
+                    _debrisList.RemoveAt(i);
+                    continue;
+                }
+
+                if (d.Kind == DebrisKind.Shockwave)
+                {
+                    d.Radius += (d.MaxRadius - d.Radius) * 0.22f + 2.0f;
+                    continue;
+                }
+
+                d.X += d.Vx;
+                d.Y += d.Vy;
+                d.Vy += d.Gravity;
+                d.Vx *= 0.985f;
+                d.Angle += d.AngularVelocity;
+
+                // Bounce on floor / taskbar with damping
+                if (d.Y >= floorY - d.Radius)
+                {
+                    d.Y = floorY - d.Radius;
+                    d.Vy = -d.Vy * 0.35f;
+                    d.Vx *= 0.70f;
+                    if (Math.Abs(d.Vy) < 1.0f) d.Vy = 0f;
+                }
+            }
+        }
+
+        private void DrawDebris(Graphics g)
+        {
+            if (_debrisList.Count == 0) return;
+
+            // 1. Draw Shockwaves first (underneath debris)
+            for (int i = 0; i < _debrisList.Count; i++)
+            {
+                ShatterDebris d = _debrisList[i];
+                if (d.Kind != DebrisKind.Shockwave) continue;
+
+                int ringAlpha = Math.Max(0, Math.Min(255, (int)(d.Alpha * 180f)));
+                if (ringAlpha > 3)
+                {
+                    using (Pen glowPen = new Pen(Color.FromArgb(ringAlpha / 3, 180, 225, 255), 12.0f))
+                    using (Pen ringPen = new Pen(Color.FromArgb(ringAlpha, 235, 248, 255), 4.0f))
+                    {
+                        g.DrawEllipse(glowPen, d.X - d.Radius, d.Y - d.Radius * 0.75f, d.Radius * 2f, d.Radius * 1.5f);
+                        g.DrawEllipse(ringPen, d.X - d.Radius, d.Y - d.Radius * 0.75f, d.Radius * 2f, d.Radius * 1.5f);
+                    }
+                }
+            }
+
+            // 2. Draw Snow Chunks & Props
+            for (int i = 0; i < _debrisList.Count; i++)
+            {
+                ShatterDebris d = _debrisList[i];
+                if (d.Kind == DebrisKind.Shockwave) continue;
+
+                int alpha = Math.Max(0, Math.Min(255, (int)(d.Alpha * 255f)));
+                if (alpha <= 2) continue;
+
+                if (d.Kind == DebrisKind.SnowChunk)
+                {
+                    RectangleF cRect = new RectangleF(d.X - d.Radius, d.Y - d.Radius, d.Radius * 2f, d.Radius * 2f);
+                    using (GraphicsPath cp = new GraphicsPath())
+                    {
+                        cp.AddEllipse(cRect);
+                        using (PathGradientBrush pgb = new PathGradientBrush(cp))
+                        {
+                            pgb.CenterPoint = new PointF(d.X - d.Radius * 0.35f, d.Y - d.Radius * 0.35f);
+                            pgb.CenterColor = Color.FromArgb(alpha, 255, 255, 255);
+                            pgb.SurroundColors = new Color[] { Color.FromArgb(alpha, 210, 226, 245) };
+                            g.FillPath(pgb, cp);
+                        }
+                    }
+                }
+                else if (d.Kind == DebrisKind.CarrotNose)
+                {
+                    GraphicsState gs = g.Save();
+                    g.TranslateTransform(d.X, d.Y);
+                    g.RotateTransform((float)(d.Angle * 180.0 / Math.PI));
+                    using (SolidBrush carrotB = new SolidBrush(Color.FromArgb(alpha, 255, 115, 0)))
+                    {
+                        PointF[] nosePts = new PointF[] {
+                            new PointF(-4f, -5f),
+                            new PointF(-4f, 5f),
+                            new PointF(22f, 1f)
+                        };
+                        g.FillPolygon(carrotB, nosePts);
+                    }
+                    g.Restore(gs);
+                }
+                else if (d.Kind == DebrisKind.Coal)
+                {
+                    using (SolidBrush coalB = new SolidBrush(Color.FromArgb(alpha, 25, 28, 35)))
+                    {
+                        g.FillEllipse(coalB, d.X - d.Radius, d.Y - d.Radius, d.Radius * 2f, d.Radius * 2f);
+                    }
+                }
+                else if (d.Kind == DebrisKind.SantaHat)
+                {
+                    GraphicsState hs = g.Save();
+                    g.TranslateTransform(d.X, d.Y);
+                    g.RotateTransform((float)(d.Angle * 180.0 / Math.PI));
+                    PointF[] hatPoly = new PointF[] {
+                        new PointF(-16f, 8f),
+                        new PointF(16f, 8f),
+                        new PointF(24f, -14f),
+                        new PointF(0f, -26f)
+                    };
+                    using (SolidBrush hatB = new SolidBrush(Color.FromArgb(alpha, 235, 45, 55)))
+                    using (SolidBrush whiteB = new SolidBrush(Color.FromArgb(alpha, 255, 255, 255)))
+                    {
+                        g.FillPolygon(hatB, hatPoly);
+                        g.FillEllipse(whiteB, -18f, 4f, 36f, 9f);  // brim
+                        g.FillEllipse(whiteB, 20f, -18f, 9f, 9f); // pom-pom
+                    }
+                    g.Restore(hs);
+                }
+            }
         }
 
         public void Update(WindowManager winMgr, int mouseX, int mouseY, bool isMouseDown, int screenWidth, int screenHeight, Action<float, float, int> onSnowPuff)
@@ -752,6 +1028,8 @@ namespace BoWeather.Particles
 
         public void Draw(Graphics g)
         {
+            DrawDebris(g);
+
             for (int i = 0; i < _snowballs.Count; i++)
             {
                 Snowball s = _snowballs[i];
