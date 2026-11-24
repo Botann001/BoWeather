@@ -213,21 +213,11 @@ namespace BoWeather
             StartPosition = FormStartPosition.Manual;
             AutoScaleMode = AutoScaleMode.None;
 
-            int vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
-            int vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
-            int vw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-            int vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-
-            if (vw <= 0 || vh <= 0)
-            {
-                Rectangle virtualScreen = SystemInformation.VirtualScreen;
-                vx = virtualScreen.Left;
-                vy = virtualScreen.Top;
-                vw = virtualScreen.Width;
-                vh = virtualScreen.Height;
-            }
-
-            Bounds = new Rectangle(vx, vy, vw, vh);
+            Screen primary = Screen.PrimaryScreen;
+            Rectangle scrBounds = (primary != null) ? primary.Bounds : new Rectangle(0, 0, 1920, 1080);
+            Bounds = scrBounds;
+            int vw = scrBounds.Width;
+            int vh = scrBounds.Height;
 
             _windowManager = new WindowManager(this.Handle, vw, vh);
             _particleSystem = new ParticleSystem(vw, vh);
@@ -483,6 +473,13 @@ namespace BoWeather
                 {
                     int msg = wParam.ToInt32();
                     MSLLHOOKSTRUCT hook = (MSLLHOOKSTRUCT)Marshal.PtrToStructure(lParam, typeof(MSLLHOOKSTRUCT));
+
+                    // Multi-monitor fast-path: if cursor is on secondary monitor, pass through immediately!
+                    if (!Bounds.Contains(hook.pt.x, hook.pt.y))
+                    {
+                        return CallNextHookEx(_mouseHook, nCode, wParam, lParam);
+                    }
+
                     int mouseX = hook.pt.x - Bounds.Left;
                     int mouseY = hook.pt.y - Bounds.Top;
 
