@@ -176,17 +176,13 @@ namespace BoWeather
             float centerY = anchor.Y + 8f;
             float glowRadius = 14f;
 
-            using (GraphicsPath glowPath = new GraphicsPath())
+            int glowAlpha = (int)((isDarkMode ? 75 : 50) * pulse);
+            using (SolidBrush glowOuter = new SolidBrush(Color.FromArgb(glowAlpha / 2, color)))
+            using (SolidBrush glowInner = new SolidBrush(Color.FromArgb(glowAlpha, color)))
             {
-                glowPath.AddEllipse(anchor.X - glowRadius, centerY - glowRadius,
-                    glowRadius * 2f, glowRadius * 2f);
-                using (PathGradientBrush glow = new PathGradientBrush(glowPath))
-                {
-                    glow.CenterPoint = new PointF(anchor.X, centerY);
-                    glow.CenterColor = Color.FromArgb((int)((isDarkMode ? 85 : 60) * pulse), color);
-                    glow.SurroundColors = new Color[] { Color.FromArgb(0, color) };
-                    g.FillPath(glow, glowPath);
-                }
+                g.FillEllipse(glowOuter, anchor.X - glowRadius, centerY - glowRadius, glowRadius * 2f, glowRadius * 2f);
+                float rIn = glowRadius * 0.55f;
+                g.FillEllipse(glowInner, anchor.X - rIn, centerY - rIn, rIn * 2f, rIn * 2f);
             }
 
             using (Pen stem = new Pen(Color.FromArgb(245, 33, 57, 44), 1.5f))
@@ -209,12 +205,13 @@ namespace BoWeather
                     anchor.X + 2.5f, anchor.Y + 4f);
                 glass.CloseFigure();
 
-                using (PathGradientBrush fill = new PathGradientBrush(glass))
+                Color brightColor = Color.FromArgb(255,
+                    Math.Min(255, color.R + 85), Math.Min(255, color.G + 85), Math.Min(255, color.B + 85));
+                using (LinearGradientBrush fill = new LinearGradientBrush(
+                    new PointF(anchor.X - 4f, anchor.Y + 4f),
+                    new PointF(anchor.X + 4f, anchor.Y + 14f),
+                    brightColor, color))
                 {
-                    fill.CenterPoint = new PointF(anchor.X - 1f, anchor.Y + 7f);
-                    fill.CenterColor = Color.FromArgb(255,
-                        Math.Min(255, color.R + 95), Math.Min(255, color.G + 95), Math.Min(255, color.B + 95));
-                    fill.SurroundColors = new Color[] { Color.FromArgb(245, color) };
                     g.FillPath(fill, glass);
                 }
             }

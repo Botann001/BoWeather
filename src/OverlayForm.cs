@@ -181,6 +181,7 @@ namespace BoWeather
         private bool _isHookInteracting = false;
         private bool _isRightClickInteracting = false;
         private bool _isChristmasInteracting = false;
+        private int _topmostCounter = 0;
 
         public ParticleSystem Particles { get { return _particleSystem; } }
         public WindowManager WindowMgr { get { return _windowManager; } }
@@ -369,7 +370,12 @@ namespace BoWeather
                     _wasAutoPaused = false;
                 }
 
-                SetWindowPos(this.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                _topmostCounter++;
+                if (_topmostCounter >= 60)
+                {
+                    _topmostCounter = 0;
+                    SetWindowPos(this.Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                }
 
                 _taskbarTop = GetTaskbarTop();
                 _particleSystem.TaskbarTop = _taskbarTop;
@@ -380,6 +386,11 @@ namespace BoWeather
                 int mouseX = cursor.X - Bounds.Left;
                 int mouseY = cursor.Y - Bounds.Top;
                 bool isMouseDown = (_mouseHook == IntPtr.Zero) && ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0);
+
+                if (_particleSystem.Christmas != null)
+                {
+                    _particleSystem.Christmas.UpdateHover(mouseX, mouseY);
+                }
 
                 _particleSystem.Update(_windowManager, mouseX, mouseY, isMouseDown);
 
@@ -562,42 +573,17 @@ namespace BoWeather
                     }
                     else if (msg == WM_MOUSEMOVE)
                     {
-                        if (_particleSystem.Christmas != null)
-                        {
-                            bool isOverApp = false;
-                            if (_particleSystem.Christmas.BehindActiveWindows && !_isChristmasInteracting)
-                            {
-                                IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
-                                IntPtr rootWnd = GetAncestor(wndUnderCursor, GA_ROOT);
-                                if (rootWnd == IntPtr.Zero) rootWnd = wndUnderCursor;
-                                if (!IsDesktopOrTaskbarWindow(rootWnd) && rootWnd != this.Handle)
-                                {
-                                    isOverApp = true;
-                                }
-                            }
-
-                            if (isOverApp)
-                            {
-                                _particleSystem.Christmas.UpdateHover(-9999, -9999);
-                            }
-                            else
-                            {
-                                _particleSystem.Christmas.UpdateHover(mouseX, mouseY);
-                            }
-
-                            if (_isChristmasInteracting)
-                            {
-                                int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
-                                _particleSystem.Christmas.OnMouseMove(mouseX, mouseY, _windowManager, Bounds.Width, floorY, _particleSystem.SpawnSnowPuff);
-                            }
-                        }
-
                         if (_isHookInteracting)
                         {
                             int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
                             _particleSystem.Snowballs.OnMouseMove(mouseX, mouseY, _windowManager, Bounds.Width, floorY, _particleSystem.SpawnSnowPuff);
                         }
-                        // NEVER return (IntPtr)1 for WM_MOUSEMOVE! In WH_MOUSE_LL, returning non-zero freezes the Windows cursor!
+                        else if (_isChristmasInteracting && _particleSystem.Christmas != null)
+                        {
+                            int floorY = (_taskbarTop > 100 && _taskbarTop < Bounds.Height) ? _taskbarTop : Bounds.Height;
+                            _particleSystem.Christmas.OnMouseMove(mouseX, mouseY, _windowManager, Bounds.Width, floorY, _particleSystem.SpawnSnowPuff);
+                        }
+                        // If user is not dragging, do ZERO work inside WH_MOUSE_LL hook for maximum cursor responsiveness!
                     }
                     else if (msg == WM_LBUTTONUP)
                     {

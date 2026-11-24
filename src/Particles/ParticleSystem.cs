@@ -1203,23 +1203,26 @@ namespace BoWeather.Particles
 
             switch (p.Variant)
             {
-                case 0: // Bokeh Foreground (Soft radial gradient blur)
+                case 0: // Bokeh Foreground (Soft radial blur - ultra-fast 3-tier concentric alpha)
                     {
                         float r = p.Size * 0.5f;
-                        RectangleF rect = new RectangleF(p.X - r, p.Y - r, p.Size, p.Size);
-                        if (rect.Width > 1f && rect.Height > 1f)
+                        int aHalo = (int)(alpha * 0.28f);
+                        int aMid = (int)(alpha * 0.52f);
+                        int aCore = (int)(alpha * 0.85f);
+
+                        using (SolidBrush bHalo = new SolidBrush(Color.FromArgb(aHalo, 210, 235, 255)))
                         {
-                            using (GraphicsPath gp = new GraphicsPath())
-                            {
-                                gp.AddEllipse(rect);
-                                using (PathGradientBrush pgb = new PathGradientBrush(gp))
-                                {
-                                    pgb.CenterPoint = new PointF(p.X, p.Y);
-                                    pgb.CenterColor = Color.FromArgb((int)(alpha * 0.85f), 255, 255, 255);
-                                    pgb.SurroundColors = new Color[] { Color.FromArgb(0, 210, 235, 255) };
-                                    g.FillPath(pgb, gp);
-                                }
-                            }
+                            g.FillEllipse(bHalo, p.X - r, p.Y - r, p.Size, p.Size);
+                        }
+                        using (SolidBrush bMid = new SolidBrush(Color.FromArgb(aMid, 230, 245, 255)))
+                        {
+                            float rMid = r * 0.65f;
+                            g.FillEllipse(bMid, p.X - rMid, p.Y - rMid, rMid * 2f, rMid * 2f);
+                        }
+                        using (SolidBrush bCore = new SolidBrush(Color.FromArgb(aCore, 255, 255, 255)))
+                        {
+                            float rCore = r * 0.35f;
+                            g.FillEllipse(bCore, p.X - rCore, p.Y - rCore, rCore * 2f, rCore * 2f);
                         }
                     }
                     break;
@@ -1231,28 +1234,25 @@ namespace BoWeather.Particles
                         g.RotateTransform(p.Angle);
 
                         float r = p.Size * 0.5f;
-                        float penWidth = Math.Max(1.0f, p.Size * 0.11f);
+                        float penWidth = Math.Max(1.0f, p.Size * 0.12f);
                         using (Pen pen = new Pen(Color.FromArgb(alpha, 255, 255, 255), penWidth))
                         {
-                            // 3 diameters = 6 arms
+                            // 3 diameters (6 arms) using direct coordinates without rotation loops
+                            float dx = r * 0.866f;
+                            float dy = r * 0.5f;
                             g.DrawLine(pen, 0f, -r, 0f, r);
-                            g.RotateTransform(60f);
-                            g.DrawLine(pen, 0f, -r, 0f, r);
-                            g.RotateTransform(60f);
-                            g.DrawLine(pen, 0f, -r, 0f, r);
-                            g.RotateTransform(-120f); // Reset rotation to initial angle
+                            g.DrawLine(pen, -dx, -dy, dx, dy);
+                            g.DrawLine(pen, -dx, dy, dx, -dy);
 
                             // Branching dendrite needles
-                            if (p.Size >= 7.5f)
+                            if (p.Size >= 8.0f)
                             {
-                                float brLen = r * 0.38f;
-                                for (int i = 0; i < 6; i++)
-                                {
-                                    float midR = r * 0.52f;
-                                    g.DrawLine(pen, 0f, -midR, -brLen, -midR + brLen * 0.55f);
-                                    g.DrawLine(pen, 0f, -midR, brLen, -midR + brLen * 0.55f);
-                                    g.RotateTransform(60f);
-                                }
+                                float br = r * 0.45f;
+                                float brLen = r * 0.35f;
+                                g.DrawLine(pen, 0f, -br, -brLen, -br + brLen * 0.5f);
+                                g.DrawLine(pen, 0f, -br, brLen, -br + brLen * 0.5f);
+                                g.DrawLine(pen, 0f, br, -brLen, br - brLen * 0.5f);
+                                g.DrawLine(pen, 0f, br, brLen, br - brLen * 0.5f);
                             }
                         }
 

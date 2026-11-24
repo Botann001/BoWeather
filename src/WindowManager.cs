@@ -285,8 +285,8 @@ namespace BoWeather
         public void RefreshWindows(bool force)
         {
             DateTime now = DateTime.Now;
-            // Responsive 25ms interval for fluid window tracking when dragging
-            if (!force && (now - _lastScanTime).TotalMilliseconds < 25)
+            // Balanced 120ms interval for fluid window tracking with near-zero CPU overhead
+            if (!force && (now - _lastScanTime).TotalMilliseconds < 120)
             {
                 return;
             }
