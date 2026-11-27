@@ -204,7 +204,7 @@ namespace BoWeather
 
         public void InitFloorSnow(int screenWidth)
         {
-            int pts = Math.Max(40, screenWidth / 16);
+            int pts = Math.Max(60, screenWidth / 6);
             FloorSnowPoints = new float[pts];
             MaxFloorSnowPoints = new float[pts];
             for (int i = 0; i < pts; i++)

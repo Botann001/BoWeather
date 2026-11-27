@@ -768,7 +768,8 @@ namespace BoWeather.Particles
                     {
                         if (winMgr.FloorSnowPoints[p] < winMgr.MaxFloorSnowPoints[p])
                         {
-                            winMgr.FloorSnowPoints[p] = Math.Min(winMgr.MaxFloorSnowPoints[p], winMgr.FloorSnowPoints[p] + 0.075f);
+                            // Slow natural settling (~20-25s) so snowplow trails remain visibly clean
+                            winMgr.FloorSnowPoints[p] = Math.Min(winMgr.MaxFloorSnowPoints[p], winMgr.FloorSnowPoints[p] + 0.012f);
                         }
                     }
                 }
@@ -1154,10 +1155,23 @@ namespace BoWeather.Particles
                     }
                 }
 
-                // Crystalline crest highlight along top ridge
+                // Crystalline crest highlight along top ridge (skip cleared bare floor sections)
                 using (Pen crestPen = new Pen(Color.FromArgb(a235, 255, 255, 255), 1.0f))
                 {
-                    g.DrawCurve(crestPen, topPts.ToArray(), 0.32f);
+                    if (isWindow)
+                    {
+                        g.DrawCurve(crestPen, topPts.ToArray(), 0.32f);
+                    }
+                    else
+                    {
+                        for (int i = 0; i < topPts.Count - 1; i++)
+                        {
+                            if (smoothH[i] > 0.4f || smoothH[i + 1] > 0.4f)
+                            {
+                                g.DrawLine(crestPen, topPts[i], topPts[i + 1]);
+                            }
+                        }
+                    }
                 }
             }
         }

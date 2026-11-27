@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 
@@ -7,7 +8,8 @@ namespace BoWeather.Particles
 {
     /// <summary>
     /// Manages the animated yellow tracked snowplow vehicle that drives along the taskbar edge,
-    /// scraping accumulated snow, kicking up snow spray, and pushing loose snowballs.
+    /// scraping accumulated snow, pushing a visible snow wave ahead of its blade, kicking up snow spray,
+    /// and pushing loose snowballs.
     /// </summary>
     public class SnowplowManager
     {
@@ -20,21 +22,23 @@ namespace BoWeather.Particles
 
         private float _wheelAngle = 0f;
         private float _beaconTick = 0f;
-        private float _pushedSnow = 0f; // 0..1 snow wedge buildup in front of blade
+        private float _pushedSnow = 0f; // 0..1 snow wave buildup in front of blade
         private float _patrolCooldown = 480f; // ~8s after startup for first automatic appearance
         private int _nextSpawnDir = 1;
         private int _sprayCooldown = 0;
         private readonly Random _rand = new Random();
+        private readonly Stopwatch _clock = Stopwatch.StartNew();
+        private double _lastTimeSec = 0.0;
 
         // Truck geometry constants (local coords centered at X, ground at Y)
-        private const float BaseSpeed = 1.85f;
-        private const float TurboSpeed = 3.6f;
+        private const float BaseSpeed = 2.15f;
+        private const float TurboSpeed = 4.0f;
         private const float BladeTipOffsetX = 46f;
         private const float TruckHalfWidth = 48f;
         private const float TruckHeight = 46f;
 
         /// <summary>
-        /// Immediately sends the snowplow onto the screen (or boosts/reverses if already active).
+        /// Immediately sends the snowplow onto the screen (or boosts if already active).
         /// </summary>
         public void Summon(int screenWidth, int floorY)
         {
@@ -54,6 +58,7 @@ namespace BoWeather.Particles
             IsActive = true;
             IsTurbo = false;
             _pushedSnow = 0f;
+            _lastTimeSec = _clock.Elapsed.TotalSeconds;
             Y = floorY;
             X = (dir > 0) ? -75f : (screenWidth + 75f);
         }
@@ -79,12 +84,19 @@ namespace BoWeather.Particles
         }
 
         /// <summary>
-        /// Updates snowplow movement, auto-patrol timer, floor snow clearing, and snowball pushing.
+        /// Updates snowplow movement (delta-time smoothed), auto-patrol timer,
+        /// real volume snow bulldozing ahead of the blade, and snowball pushing.
         /// </summary>
         public void Update(WindowManager winMgr, SnowballManager snowballs, EffectType currentEffect,
             bool enableWindowPhysics, int screenWidth, int floorY, Action<float, float, int> onSnowPuff)
         {
-            _beaconTick += 0.22f;
+            double nowSec = _clock.Elapsed.TotalSeconds;
+            float dtSec = (float)(nowSec - _lastTimeSec);
+            _lastTimeSec = nowSec;
+            if (dtSec <= 0f || dtSec > 0.08f) dtSec = 1f / 60f;
+            float dtScale = dtSec * 60f; // Normalized to 60 FPS units
+
+            _beaconTick += 0.22f * dtScale;
 
             if (!IsActive)
             {
@@ -93,10 +105,9 @@ namespace BoWeather.Particles
                     return;
                 }
 
-                _patrolCooldown -= 1f;
+                _patrolCooldown -= dtScale;
                 if (_patrolCooldown <= 0f)
                 {
-                    // Check if taskbar snow is deep enough to warrant plowing
                     float sum = 0f;
                     float[] pts = winMgr.FloorSnowPoints;
                     for (int i = 0; i < pts.Length; i++) sum += pts[i];
@@ -106,21 +117,22 @@ namespace BoWeather.Particles
                     {
                         SpawnTruck(screenWidth, floorY, _nextSpawnDir);
                         _nextSpawnDir = -_nextSpawnDir;
-                        _patrolCooldown = 2700f + _rand.Next(0, 900); // Next patrol ~45-60s after finishing
+                        _patrolCooldown = 2700f + _rand.Next(0, 900);
                     }
                     else
                     {
-                        _patrolCooldown = 300f; // Check again in ~5s
+                        _patrolCooldown = 300f;
                     }
                 }
                 return;
             }
 
-            // Active driving update
+            // Active smooth delta-time movement
             Y = floorY;
-            float speed = (IsTurbo ? TurboSpeed : BaseSpeed) * Direction;
-            X += speed;
-            _wheelAngle += speed * 0.14f;
+            float stepSpeed = (IsTurbo ? TurboSpeed : BaseSpeed) * dtScale;
+            float vx = stepSpeed * Direction;
+            X += vx;
+            _wheelAngle += vx * 0.14f;
 
             // Leave screen cleanly on the far side
             if ((Direction > 0 && X > screenWidth + 95f) || (Direction < 0 && X < -95f))
@@ -131,7 +143,7 @@ namespace BoWeather.Particles
                 return;
             }
 
-            // Scrape taskbar/floor snow along the blade path
+            // Scrape snow cleanly behind the blade AND push scraped volume forward ahead of the blade!
             float bladeX = X + Direction * BladeTipOffsetX;
             float scoopedAmount = 0f;
 
@@ -139,57 +151,69 @@ namespace BoWeather.Particles
             {
                 float[] pts = winMgr.FloorSnowPoints;
                 float step = (float)screenWidth / (pts.Length - 1);
-                float clearBackX = X - Direction * 12f; // Track & chassis footprint behind blade
+                float clearBackX = X - Direction * 24f;
                 float minX = Math.Min(clearBackX, bladeX);
                 float maxX = Math.Max(clearBackX, bladeX);
 
+                // 1. Scrape snow behind/at blade down to 0 (clean bare taskbar trail!)
                 for (int i = 0; i < pts.Length; i++)
                 {
                     float colX = i * step;
-
                     if (colX >= minX && colX <= maxX)
                     {
-                        // Scrape cleanly down to a thin frost sheen (1.2px)
-                        float residual = 1.2f;
-                        if (pts[i] > residual)
+                        if (pts[i] > 0f)
                         {
-                            scoopedAmount += (pts[i] - residual);
-                            pts[i] = residual;
+                            scoopedAmount += pts[i];
+                            pts[i] = 0f;
                         }
                     }
-                    else
+                }
+
+                // 2. Bulldoze/transfer scraped snow forward right ahead of the blade (makes snow visibly pile up & drag!)
+                float waveCenter = bladeX + Direction * 16f;
+                float waveRadius = 24f;
+                float pushBoost = Math.Min(6.5f, scoopedAmount * 0.22f) + (_pushedSnow * 0.55f * dtScale);
+
+                if (pushBoost > 0.05f)
+                {
+                    for (int i = 0; i < pts.Length; i++)
                     {
-                        // Taper snow edge gently just ahead of the blade tip
+                        float colX = i * step;
                         float distAhead = (colX - bladeX) * Direction;
-                        if (distAhead > 0f && distAhead < 22f)
+                        if (distAhead > 0f && distAhead < waveRadius * 2f)
                         {
-                            float ratio = distAhead / 22f;
-                            float maxRamp = winMgr.MaxFloorSnowPoints != null
-                                ? winMgr.MaxFloorSnowPoints[i] * ratio + 1.5f
-                                : 18f * ratio;
-                            if (pts[i] > maxRamp)
+                            // Smooth bell-shaped snow wave pushed ahead of the blade
+                            float norm = (colX - waveCenter) / waveRadius;
+                            float bell = Math.Max(0f, 1f - norm * norm);
+                            if (bell > 0f)
                             {
-                                scoopedAmount += (pts[i] - maxRamp) * 0.5f;
-                                pts[i] = maxRamp;
+                                float baseMax = (winMgr.MaxFloorSnowPoints != null) ? winMgr.MaxFloorSnowPoints[i] : 18f;
+                                float cap = baseMax * 1.95f;
+                                pts[i] = Math.Min(cap, pts[i] + pushBoost * bell * 0.42f);
                             }
                         }
                     }
                 }
             }
 
-            // Build up or decay snow wedge in front of the blade
-            if (scoopedAmount > 0.25f)
+            // Build up or gently decay internal blade snow curl
+            if (scoopedAmount > 0.1f)
             {
-                _pushedSnow = Math.Min(1.0f, _pushedSnow + scoopedAmount * 0.045f);
-                if (_sprayCooldown <= 0 && onSnowPuff != null)
-                {
-                    onSnowPuff(bladeX + Direction * 4f, Y - 7f, IsTurbo ? 3 : 2);
-                    _sprayCooldown = IsTurbo ? 2 : 4;
-                }
+                _pushedSnow = Math.Min(1.0f, _pushedSnow + scoopedAmount * 0.032f);
             }
             else
             {
-                _pushedSnow = Math.Max(0f, _pushedSnow - 0.025f);
+                _pushedSnow = Math.Max(0f, _pushedSnow - 0.012f * dtScale);
+            }
+
+            // Spray snow particles off the curling wave when pushing snow!
+            if (_pushedSnow > 0.12f && onSnowPuff != null)
+            {
+                if (_sprayCooldown <= 0)
+                {
+                    onSnowPuff(bladeX + Direction * 8f, Y - 14f - _pushedSnow * 10f, IsTurbo ? 3 : 2);
+                    _sprayCooldown = IsTurbo ? 2 : 3;
+                }
             }
 
             if (_sprayCooldown > 0) _sprayCooldown--;
@@ -205,11 +229,11 @@ namespace BoWeather.Particles
                     if (b.Y + b.BaseRadius < floorY - 28f) continue;
 
                     float distToBlade = (b.X - bladeX) * Direction;
-                    if (distToBlade >= -12f && distToBlade <= b.BaseRadius + 10f)
+                    if (distToBlade >= -12f && distToBlade <= b.BaseRadius + 12f)
                     {
-                        b.X = bladeX + Direction * (b.BaseRadius + 10f);
-                        b.Vx = speed * 1.08f;
-                        b.Angle += speed * 0.12f;
+                        b.X = bladeX + Direction * (b.BaseRadius + 12f);
+                        b.Vx = vx * 1.05f;
+                        b.Angle += vx * 0.12f;
                     }
                 }
             }
@@ -238,27 +262,36 @@ namespace BoWeather.Particles
                 g.DrawLine(strutPen, 18f, -16f, 34f, -18f);
             }
 
-            // 2. Pushed snow wedge cupped directly in front of the curved blade
+            // 2. Big rolling snow wave cupped directly in front of the curved blade
             if (_pushedSnow > 0.05f)
             {
-                float pileH = 7f + 11f * _pushedSnow;
-                float pileW = 14f + 14f * _pushedSnow;
+                float pileH = 10f + 18f * _pushedSnow;
+                float pileW = 18f + 22f * _pushedSnow;
                 using (GraphicsPath snowPath = new GraphicsPath())
                 {
                     snowPath.AddBezier(
-                        38f, -1.5f,
-                        40f, -pileH * 1.1f,
-                        44f + pileW * 0.48f, -pileH * 0.85f,
-                        46f + pileW, 0f);
-                    snowPath.AddLine(46f + pileW, 0f, 38f, 0f);
+                        37f, -1.5f,
+                        37f, -pileH * 1.18f,
+                        44f + pileW * 0.48f, -pileH * 0.92f,
+                        48f + pileW, 0f);
+                    snowPath.AddLine(48f + pileW, 0f, 37f, 0f);
                     snowPath.CloseFigure();
 
                     using (LinearGradientBrush snowBrush = new LinearGradientBrush(
-                        new PointF(38f, -pileH), new PointF(38f, 1f),
+                        new PointF(37f, -pileH), new PointF(37f, 1f),
                         Color.FromArgb(255, 255, 255, 255),
-                        Color.FromArgb(255, 218, 232, 248)))
+                        Color.FromArgb(255, 212, 229, 247)))
                     {
                         g.FillPath(snowBrush, snowPath);
+                    }
+                    // Subtle icy crest highlight along the curling snow wave
+                    using (Pen crest = new Pen(Color.FromArgb(220, 255, 255, 255), 1.4f))
+                    {
+                        g.DrawBezier(crest,
+                            38f, -pileH * 0.45f,
+                            40f, -pileH * 1.05f,
+                            44f + pileW * 0.45f, -pileH * 0.85f,
+                            47f + pileW, -1f);
                     }
                 }
             }

@@ -242,7 +242,7 @@ namespace BoWeather
             InitBuffers(vw, vh);
 
             _renderTimer = new Timer();
-            _renderTimer.Interval = 16;
+            _renderTimer.Interval = 14; // Avoid Windows 15.6ms clock rounding 16ms up to 31.2ms (32 FPS)
             _renderTimer.Tick += OnRenderTick;
             _renderTimer.Start();
         }
