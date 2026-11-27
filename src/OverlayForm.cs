@@ -89,6 +89,7 @@ namespace BoWeather
         private const int WM_LBUTTONUP = 0x0202;
         private const int WM_RBUTTONDOWN = 0x0204;
         private const int WM_RBUTTONUP = 0x0205;
+        private const int WM_MOUSEWHEEL = 0x020A;
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
@@ -679,6 +680,29 @@ namespace BoWeather
                         {
                             _isRightClickInteracting = false;
                             return (IntPtr)1;
+                        }
+                    }
+                    else if (msg == WM_MOUSEWHEEL && _particleSystem.Christmas != null)
+                    {
+                        bool canInteractChristmas = true;
+                        if (_particleSystem.Christmas.BehindActiveWindows)
+                        {
+                            IntPtr wndUnderCursor = WindowFromPoint(hook.pt);
+                            IntPtr rootWnd = GetAncestor(wndUnderCursor, GA_ROOT);
+                            if (rootWnd == IntPtr.Zero) rootWnd = wndUnderCursor;
+                            if (!IsDesktopOrTaskbarWindow(rootWnd) && rootWnd != this.Handle)
+                            {
+                                canInteractChristmas = false;
+                            }
+                        }
+
+                        if (canInteractChristmas)
+                        {
+                            int delta = (short)((hook.mouseData >> 16) & 0xFFFF);
+                            if (_particleSystem.Christmas.AdjustScaleAt(mouseX, mouseY, delta))
+                            {
+                                return (IntPtr)1;
+                            }
                         }
                     }
                 }

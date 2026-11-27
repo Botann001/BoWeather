@@ -954,7 +954,8 @@ namespace BoWeather
         public void OpenChristmasDecor()
         {
             if (_overlay == null || _overlay.Christmas == null) return;
-            using (ChristmasDecorForm form = new ChristmasDecorForm(_overlay.Christmas, _overlay, _isDarkMode))
+            bool isId = (_trayManager != null && _trayManager.CurrentLanguage == AppLanguage.Indonesian);
+            using (ChristmasDecorForm form = new ChristmasDecorForm(_overlay.Christmas, _overlay, _isDarkMode, isId))
             {
                 form.ShowDialog();
             }

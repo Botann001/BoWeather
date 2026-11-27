@@ -173,52 +173,40 @@ namespace BoWeather
 
         private static void DrawBulb(Graphics g, PointF anchor, Color color, float pulse, bool isDarkMode)
         {
-            float centerY = anchor.Y + 8f;
-            float glowRadius = 14f;
+            float centerY = anchor.Y + 7.5f;
+            float glowRadius = 20f;
 
-            int glowAlpha = (int)((isDarkMode ? 75 : 50) * pulse);
-            using (SolidBrush glowOuter = new SolidBrush(Color.FromArgb(glowAlpha / 2, color)))
-            using (SolidBrush glowInner = new SolidBrush(Color.FromArgb(glowAlpha, color)))
-            {
-                g.FillEllipse(glowOuter, anchor.X - glowRadius, centerY - glowRadius, glowRadius * 2f, glowRadius * 2f);
-                float rIn = glowRadius * 0.55f;
-                g.FillEllipse(glowInner, anchor.X - rIn, centerY - rIn, rIn * 2f, rIn * 2f);
-            }
+            // Velvety smooth radial optical bloom (zero hard edges, cached sprite!)
+            int glowAlpha = (int)((isDarkMode ? 145 : 105) * pulse);
+            ChristmasAssets.DrawSoftGlow(g, anchor.X, centerY, glowRadius, color, glowAlpha);
 
+            // Tiny dark socket & cord stem
             using (Pen stem = new Pen(Color.FromArgb(245, 33, 57, 44), 1.5f))
-            using (SolidBrush socket = new SolidBrush(Color.FromArgb(255, 38, 63, 48)))
-            using (Pen socketHighlight = new Pen(Color.FromArgb(155, 139, 159, 115), 0.7f))
+            using (SolidBrush socket = new SolidBrush(Color.FromArgb(255, 34, 54, 42)))
             {
-                g.DrawLine(stem, anchor.X, anchor.Y, anchor.X, anchor.Y + 3f);
-                g.FillRectangle(socket, anchor.X - 2.1f, anchor.Y + 1f, 4.2f, 3.5f);
-                g.DrawLine(socketHighlight, anchor.X - 1.5f, anchor.Y + 1.5f,
-                    anchor.X + 1.5f, anchor.Y + 1.5f);
+                g.DrawLine(stem, anchor.X, anchor.Y, anchor.X, anchor.Y + 2.5f);
+                g.FillRectangle(socket, anchor.X - 2.0f, anchor.Y + 0.8f, 4.0f, 3.0f);
             }
 
-            using (GraphicsPath glass = new GraphicsPath())
+            // Round-oval glowing glass bulb matching modern festive fairy lights
+            float bw = 10.6f;
+            float bh = 11.4f;
+            float bx = anchor.X - bw * 0.5f;
+            float by = anchor.Y + 2.8f;
+            Color brightColor = Color.FromArgb(255,
+                Math.Min(255, color.R + 100), Math.Min(255, color.G + 100), Math.Min(255, color.B + 100));
+            using (LinearGradientBrush fill = new LinearGradientBrush(
+                new PointF(bx, by), new PointF(bx + bw, by + bh), brightColor, color))
             {
-                glass.AddBezier(anchor.X - 2.5f, anchor.Y + 4f,
-                    anchor.X - 7f, anchor.Y + 6f, anchor.X - 5.5f, anchor.Y + 13.5f,
-                    anchor.X, anchor.Y + 14f);
-                glass.AddBezier(anchor.X, anchor.Y + 14f,
-                    anchor.X + 5.5f, anchor.Y + 13.5f, anchor.X + 7f, anchor.Y + 6f,
-                    anchor.X + 2.5f, anchor.Y + 4f);
-                glass.CloseFigure();
-
-                Color brightColor = Color.FromArgb(255,
-                    Math.Min(255, color.R + 85), Math.Min(255, color.G + 85), Math.Min(255, color.B + 85));
-                using (LinearGradientBrush fill = new LinearGradientBrush(
-                    new PointF(anchor.X - 4f, anchor.Y + 4f),
-                    new PointF(anchor.X + 4f, anchor.Y + 14f),
-                    brightColor, color))
-                {
-                    g.FillPath(fill, glass);
-                }
+                g.FillEllipse(fill, bx, by, bw, bh);
             }
 
-            using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(215 * pulse), 255, 255, 235)))
+            // Soft bright white-gold inner core & specular gleam
+            using (SolidBrush core = new SolidBrush(Color.FromArgb((int)(160 * pulse), 255, 255, 240)))
+            using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(230 * pulse), 255, 255, 255)))
             {
-                g.FillEllipse(glint, anchor.X - 2f, anchor.Y + 5f, 2.1f, 3.2f);
+                g.FillEllipse(core, anchor.X - 2.4f, centerY - 2.0f, 4.8f, 4.8f);
+                g.FillEllipse(glint, anchor.X - 2.5f, by + 1.5f, 2.2f, 2.8f);
             }
         }
 
@@ -256,7 +244,8 @@ namespace BoWeather
     {
         public float X;
         public float Y;
-        public float Size = 38f;
+        public float Size = 48f;
+        public float Scale = 1.0f;
         public bool IsGrabbed = false;
         public float GrabOffsetX = 0f;
         public float GrabOffsetY = 0f;
@@ -266,7 +255,7 @@ namespace BoWeather
         public bool IsHovered = false;
         public bool HoverDelete = false;
 
-        public ChristmasStarItem(float x, float y, float size = 38f)
+        public ChristmasStarItem(float x, float y, float size = 48f)
         {
             X = x;
             Y = y;
@@ -275,31 +264,42 @@ namespace BoWeather
 
         public RectangleF GetBounds()
         {
-            return new RectangleF(X - Size * 0.5f, Y - Size * 0.5f, Size, Size);
+            float s = Size * Scale;
+            return new RectangleF(X - s * 0.5f, Y - s * 0.5f, s, s);
         }
 
         public RectangleF GetDeleteButtonBounds()
         {
-            return new RectangleF(X + Size * 0.5f - 8f, Y - Size * 0.5f - 8f, 18f, 18f);
+            float s = Size * Scale;
+            return new RectangleF(X + s * 0.5f - 8f, Y - s * 0.5f - 8f, 18f, 18f);
         }
 
         public void Draw(Graphics g, float animTick)
         {
-            float size = Size * 1.25f;
+            float size = Size * Scale * 1.25f;
+            float twinkle = (float)(0.75 + 0.25 * Math.Sin(animTick * 2.2f + X * 0.015f));
 
-            // Draw crisp 3D star asset (fixed size, stable, no throbbing/pulsing heartbeat)
+            // Warm velvety golden aura behind the star
+            ChristmasAssets.DrawSoftGlow(g, X, Y, size * 0.72f, Color.FromArgb(255, 215, 45), (int)(110 * twinkle));
+
+            // Draw crisp 3D star asset
             if (!ChristmasAssets.DrawIcon(g, "star", X, Y, size, size))
             {
-                float rOut = Size * 0.5f;
+                float rOut = Size * Scale * 0.5f;
                 float rIn = rOut * 0.42f;
                 ChristmasManager.DrawStarPolygon(g, X, Y, rOut, rIn, Color.FromArgb(255, 255, 235, 110), Color.FromArgb(255, 235, 145, 20));
             }
 
-            // Subtle twinkle sparkle at the very center (alpha shimmer only, zero size change)
-            float twinkle = (float)(0.80 + 0.20 * Math.Sin(animTick * 1.6f + X * 0.015f));
-            using (SolidBrush glint = new SolidBrush(Color.FromArgb((int)(220 * twinkle), 255, 255, 255)))
+            // Animated 4-point sparkle glint
+            float sx = X - size * 0.14f;
+            float sy = Y - size * 0.16f;
+            float ray = 4.5f * twinkle * Scale;
+            using (Pen sp = new Pen(Color.FromArgb((int)(220 * twinkle), 255, 255, 240), 1.4f))
             {
-                g.FillEllipse(glint, X - 2f, Y - 2f, 4f, 4f);
+                sp.StartCap = LineCap.Round;
+                sp.EndCap = LineCap.Round;
+                g.DrawLine(sp, sx - ray, sy, sx + ray, sy);
+                g.DrawLine(sp, sx, sy - ray, sx, sy + ray);
             }
 
             // Delete (X) button on hover
@@ -315,8 +315,9 @@ namespace BoWeather
     {
         public float X;
         public float Y;
-        public float Width = 108f;
-        public float Height = 148f;
+        public float Width = 132f;
+        public float Height = 180f;
+        public float Scale = 1.0f;
         public bool IsGrabbed = false;
         public float GrabOffsetX = 0f;
         public float GrabOffsetY = 0f;
@@ -377,33 +378,33 @@ namespace BoWeather
 
         public RectangleF GetBounds()
         {
-            return new RectangleF(X - Width * 0.5f, Y - Height, Width, Height);
+            float w = Width * Scale;
+            float h = Height * Scale;
+            return new RectangleF(X - w * 0.5f, Y - h, w, h);
         }
 
         public RectangleF GetDeleteButtonBounds()
         {
-            return new RectangleF(X + Width * 0.42f - 10f, Y - Height + 10f - 10f, 20f, 20f);
+            float w = Width * Scale;
+            float h = Height * Scale;
+            return new RectangleF(X + w * 0.42f - 10f, Y - h + 10f - 10f, 20f, 20f);
         }
 
         public void Draw(Graphics g, float animTick)
         {
             float cx = X;
             float cy = Y;
-            float w = Width;
-            float h = Height;
+            float w = Width * Scale;
+            float h = Height * Scale;
 
-            // 0. Soft contact shadow on ground / taskbar
+            // 0. Soft contact shadow on ground / taskbar (fast concentric alpha)
             float shadowW = w * 0.88f;
-            float shadowH = 12f;
-            using (GraphicsPath sp = new GraphicsPath())
+            float shadowH = 12f * Scale;
+            using (SolidBrush shOuter = new SolidBrush(Color.FromArgb(42, 15, 25, 40)))
+            using (SolidBrush shInner = new SolidBrush(Color.FromArgb(62, 15, 25, 40)))
             {
-                sp.AddEllipse(cx - shadowW * 0.5f, cy - shadowH * 0.5f, shadowW, shadowH);
-                using (PathGradientBrush pgb = new PathGradientBrush(sp))
-                {
-                    pgb.CenterColor = Color.FromArgb(120, 15, 25, 40);
-                    pgb.SurroundColors = new Color[] { Color.FromArgb(0, 15, 25, 40) };
-                    g.FillPath(pgb, sp);
-                }
+                g.FillEllipse(shOuter, cx - shadowW * 0.5f, cy - shadowH * 0.5f, shadowW, shadowH);
+                g.FillEllipse(shInner, cx - shadowW * 0.34f, cy - shadowH * 0.36f, shadowW * 0.68f, shadowH * 0.72f);
             }
 
             // 1. Trunk (rounded warm wood with vertical grain lines)
@@ -598,25 +599,22 @@ namespace BoWeather
                     g.DrawArc(capWire, bx - br * 0.22f, by - br - 4.5f, br * 0.44f, 3.2f, 180, 180);
                 }
 
-                // Glossy spherical body
-                using (GraphicsPath bp = new GraphicsPath())
-                {
-                    bp.AddEllipse(bx - br, by - br, br * 2f, br * 2f);
-                    Color darkC = Color.FromArgb(
-                        (int)(c.R * 0.38f),
-                        (int)(c.G * 0.38f),
-                        (int)(c.B * 0.38f));
+                // Glossy spherical body (fast LinearGradientBrush instead of PathGradientBrush)
+                Color darkC = Color.FromArgb(
+                    (int)(c.R * 0.42f),
+                    (int)(c.G * 0.42f),
+                    (int)(c.B * 0.42f));
+                Color lightC = Color.FromArgb(255,
+                    Math.Min(255, (int)(c.R * 1.35f)),
+                    Math.Min(255, (int)(c.G * 1.35f)),
+                    Math.Min(255, (int)(c.B * 1.35f)));
 
-                    using (PathGradientBrush pgb = new PathGradientBrush(bp))
-                    {
-                        pgb.CenterPoint = new PointF(bx - br * 0.35f, by - br * 0.35f);
-                        pgb.CenterColor = Color.FromArgb(255,
-                            Math.Min(255, (int)(c.R * 1.55f)),
-                            Math.Min(255, (int)(c.G * 1.55f)),
-                            Math.Min(255, (int)(c.B * 1.55f)));
-                        pgb.SurroundColors = new Color[] { darkC };
-                        g.FillPath(pgb, bp);
-                    }
+                using (LinearGradientBrush lgb = new LinearGradientBrush(
+                    new PointF(bx - br, by - br),
+                    new PointF(bx + br, by + br),
+                    lightC, darkC))
+                {
+                    g.FillEllipse(lgb, bx - br, by - br, br * 2f, br * 2f);
                 }
 
                 // Glossy highlights
@@ -642,20 +640,12 @@ namespace BoWeather
                 float pulse = (float)(0.75 + 0.25 * Math.Sin(animTick * 3.2f + l.Phase));
                 int alpha = (int)(255 * pulse);
 
-                // Radiant halo
-                using (SolidBrush halo = new SolidBrush(Color.FromArgb((int)(80 * pulse), l.Color)))
-                {
-                    g.FillEllipse(halo, lx - 7f, ly - 7f, 14f, 14f);
-                }
-                // Inner warm ring
-                using (SolidBrush inner = new SolidBrush(Color.FromArgb((int)(150 * pulse), 255, 245, 160)))
-                {
-                    g.FillEllipse(inner, lx - 3.2f, ly - 3.2f, 6.4f, 6.4f);
-                }
+                // Velvety warm fairy light bloom
+                ChristmasAssets.DrawSoftGlow(g, lx, ly, 11f, l.Color, (int)(125 * pulse));
                 // Bright white-gold core
                 using (SolidBrush core = new SolidBrush(Color.FromArgb(alpha, 255, 255, 245)))
                 {
-                    g.FillEllipse(core, lx - 1.6f, ly - 1.6f, 3.2f, 3.2f);
+                    g.FillEllipse(core, lx - 1.8f, ly - 1.8f, 3.6f, 3.6f);
                 }
             }
         }
@@ -664,16 +654,7 @@ namespace BoWeather
         {
             float pulse = (float)(0.80 + 0.20 * Math.Sin(animTick * 2.8f));
 
-            using (GraphicsPath gp = new GraphicsPath())
-            {
-                gp.AddEllipse(cx - r * 2.2f, cy - r * 2.2f, r * 4.4f, r * 4.4f);
-                using (PathGradientBrush pgb = new PathGradientBrush(gp))
-                {
-                    pgb.CenterColor = Color.FromArgb((int)(135 * pulse), 255, 220, 30);
-                    pgb.SurroundColors = new Color[] { Color.FromArgb(0, 255, 200, 0) };
-                    g.FillPath(pgb, gp);
-                }
-            }
+            ChristmasAssets.DrawSoftGlow(g, cx, cy, r * 2.4f, Color.FromArgb(255, 220, 45), (int)(145 * pulse));
 
             ChristmasManager.DrawStarPolygon(g, cx, cy, r, r * 0.46f,
                 Color.FromArgb(255, 255, 242, 85),
@@ -685,8 +666,9 @@ namespace BoWeather
     {
         public float X;
         public float Y;
-        public float Width = 38f;
-        public float Height = 34f;
+        public float Width = 48f;
+        public float Height = 44f;
+        public float Scale = 1.0f;
         public Color BoxColor;
         public Color RibbonColor;
         public bool IsGrabbed = false;
@@ -711,12 +693,16 @@ namespace BoWeather
 
         public RectangleF GetBounds()
         {
-            return new RectangleF(X - Width * 0.5f, Y - Height, Width, Height);
+            float w = Width * Scale;
+            float h = Height * Scale;
+            return new RectangleF(X - w * 0.5f, Y - h, w, h);
         }
 
         public RectangleF GetDeleteButtonBounds()
         {
-            return new RectangleF(X + Width * 0.5f + 2f - 9f, Y - Height - 2f - 9f, 18f, 18f);
+            float w = Width * Scale;
+            float h = Height * Scale;
+            return new RectangleF(X + w * 0.5f + 2f - 9f, Y - h - 2f - 9f, 18f, 18f);
         }
 
         public void Draw(Graphics g, float alpha = 1.0f)
@@ -724,21 +710,32 @@ namespace BoWeather
             if (alpha <= 0.01f) return;
             alpha = Math.Max(0f, Math.Min(1f, alpha));
 
-            float left = X - Width * 0.5f;
-            float top = Y - Height;
-            float w = Width;
-            float h = Height;
+            float w = Width * Scale;
+            float h = Height * Scale;
+            float left = X - w * 0.5f;
+            float top = Y - h;
 
             // 1. Soft contact shadow under the gift box
-            float shadowW = w * 1.25f;
+            float shadowW = w * 1.18f;
             float shadowH = Math.Max(4f, h * 0.22f);
-            using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb((int)(55 * alpha), 15, 25, 40)))
+            using (SolidBrush shadowBrush = new SolidBrush(Color.FromArgb((int)(52 * alpha), 15, 25, 40)))
             {
                 g.FillEllipse(shadowBrush, X - shadowW * 0.5f, Y - shadowH * 0.45f, shadowW, shadowH);
             }
 
+            // Use crisp cleaned 3D asset for classic Red+Gold box when fully opaque
+            if (alpha > 0.92f && BoxColor.R > 200 && BoxColor.G < 80 && ChristmasAssets.DrawIcon(g, "gift", X, Y - h * 0.5f, w * 1.12f, h * 1.12f))
+            {
+                if (IsHovered || HoverDelete)
+                {
+                    RectangleF delRect = GetDeleteButtonBounds();
+                    ChristmasManager.DrawDeleteButton(g, delRect.X + delRect.Width * 0.5f, delRect.Y + delRect.Height * 0.5f, HoverDelete);
+                }
+                return;
+            }
+
             // 2. Main Gift Box Body (with 3D gradient shading)
-            float lidH = 8f;
+            float lidH = 8f * Scale;
             RectangleF bodyRect = new RectangleF(left + 2f, top + lidH, w - 4f, h - lidH);
             using (GraphicsPath bp = VectorIcons.CreateRoundedRect(bodyRect, 3f))
             {
@@ -849,8 +846,9 @@ namespace BoWeather
         public string Type;
         public float X;
         public float Y;
-        public float Width = 38f;
-        public float Height = 42f;
+        public float Width = 58f;
+        public float Height = 58f;
+        public float Scale = 1.0f;
         public bool IsGrabbed = false;
         public float GrabOffsetX = 0f;
         public float GrabOffsetY = 0f;
@@ -865,40 +863,55 @@ namespace BoWeather
             Type = type;
             X = x;
             Y = y;
-            if (type == "wreath" || type == "snowglobe") { Width = 54f; Height = 54f; }
-            else if (type == "boat") { Width = 56f; Height = 50f; }
-            else if (type == "candycane") { Width = 46f; Height = 58f; }
-            else if (type == "stocking") { Width = 46f; Height = 56f; }
-            else if (type == "candle") { Width = 44f; Height = 56f; }
-            else if (type == "cocoa") { Width = 52f; Height = 50f; }
-            else if (type == "bells") { Width = 58f; Height = 50f; }
-            else if (type == "gingerbread") { Width = 50f; Height = 56f; }
-            else if (type == "holly") { Width = 54f; Height = 48f; }
-            else if (type == "santahat") { Width = 54f; Height = 48f; }
-            else if (type == "redbauble" || type == "goldbauble") { Width = 48f; Height = 54f; }
-            else if (type == "star") { Width = 54f; Height = 54f; }
-            else if (type == "gift") { Width = 50f; Height = 50f; }
-            else { Width = 50f; Height = 50f; }
+            if (type == "wreath" || type == "snowglobe") { Width = 66f; Height = 66f; }
+            else if (type == "boat") { Width = 68f; Height = 60f; }
+            else if (type == "candycane") { Width = 54f; Height = 68f; }
+            else if (type == "stocking") { Width = 56f; Height = 66f; }
+            else if (type == "candle") { Width = 52f; Height = 68f; }
+            else if (type == "cocoa") { Width = 62f; Height = 60f; }
+            else if (type == "bells") { Width = 68f; Height = 60f; }
+            else if (type == "gingerbread") { Width = 58f; Height = 66f; }
+            else if (type == "holly") { Width = 64f; Height = 56f; }
+            else if (type == "santahat") { Width = 64f; Height = 58f; }
+            else if (type == "redbauble" || type == "goldbauble") { Width = 56f; Height = 64f; }
+            else if (type == "star") { Width = 64f; Height = 64f; }
+            else if (type == "gift") { Width = 58f; Height = 58f; }
+            else { Width = 58f; Height = 58f; }
         }
 
         public RectangleF GetBounds()
         {
-            return new RectangleF(X - Width * 0.5f, Y - Height, Width, Height);
+            float w = Width * Scale;
+            float h = Height * Scale;
+            return new RectangleF(X - w * 0.5f, Y - h, w, h);
         }
 
         public RectangleF GetDeleteButtonBounds()
         {
-            return new RectangleF(X + Width * 0.5f - 8f, Y - Height - 6f, 18f, 18f);
+            float w = Width * Scale;
+            float h = Height * Scale;
+            return new RectangleF(X + w * 0.5f - 8f, Y - h - 6f, 18f, 18f);
         }
 
         public void Draw(Graphics g, float animTick)
         {
+            float w = Width * Scale;
+            float h = Height * Scale;
             float cx = X;
-            float cy = Y - Height * 0.5f;
-            float w = Width;
-            float h = Height;
+            float cy = Y - h * 0.5f;
 
-            // 1. Draw Ornament Graphic
+            // Subtle contact shadow flush beneath grounded items
+            if (Type == "candle" || Type == "snowglobe" || Type == "cocoa" || Type == "boat" || Type == "santahat" || Type == "gingerbread")
+            {
+                float sw = w * 0.72f;
+                float sh = 7f * Scale;
+                using (SolidBrush shBrush = new SolidBrush(Color.FromArgb(40, 15, 25, 40)))
+                {
+                    g.FillEllipse(shBrush, cx - sw * 0.5f, Y - sh * 0.65f, sw, sh);
+                }
+            }
+
+            // 1. Draw Crisp HD Ornament Graphic + Live Festive Animations
             DrawOrnamentGraphic(g, Type, cx, cy, w, h, animTick);
 
             // 2. Delete Button (X) on hover
@@ -913,6 +926,65 @@ namespace BoWeather
         {
             if (ChristmasAssets.DrawIcon(g, type, cx, cy, w, h))
             {
+                // Layer live subtle animations on top of the 3D assets!
+                if (type == "candle")
+                {
+                    float flicker = (float)(0.75 + 0.25 * Math.Sin(animTick * 6.5f + cx * 0.1f) * Math.Cos(animTick * 4.1f));
+                    float fy = cy - h * 0.34f;
+                    ChristmasAssets.DrawSoftGlow(g, cx, fy, Math.Max(w, h) * 0.38f, Color.FromArgb(255, 210, 65), (int)(135 * flicker));
+                }
+                else if (type == "snowglobe")
+                {
+                    // Gentle swirling snow inside the crystal dome
+                    float domeCy = cy - h * 0.08f;
+                    float domeR = Math.Min(w, h) * 0.30f;
+                    using (SolidBrush sf = new SolidBrush(Color.FromArgb(215, 255, 255, 255)))
+                    {
+                        for (int k = 0; k < 6; k++)
+                        {
+                            float phase = animTick * (0.9f + k * 0.18f) + k * 1.3f;
+                            float fx = cx + (float)Math.Sin(phase * 1.4f + k) * domeR * 0.72f;
+                            float fy = domeCy - domeR * 0.65f + ((phase * 8f) % (domeR * 1.25f));
+                            float sz = (k % 2 == 0) ? 2.4f : 1.8f;
+                            g.FillEllipse(sf, fx - sz * 0.5f, fy - sz * 0.5f, sz, sz);
+                        }
+                    }
+                }
+                else if (type == "cocoa")
+                {
+                    // Soft rising steam wisps above mug
+                    float steamBaseY = cy - h * 0.36f;
+                    for (int k = 0; k < 2; k++)
+                    {
+                        float t = ((animTick * 0.55f + k * 0.5f) % 1.0f);
+                        int a = (int)(Math.Sin(t * Math.PI) * 125);
+                        float sx = cx - w * 0.14f + k * w * 0.16f + (float)Math.Sin(t * 6.28f + k) * 3f;
+                        float sy = steamBaseY - t * (h * 0.22f);
+                        float sr = 3.2f + t * 3.0f;
+                        using (SolidBrush sb = new SolidBrush(Color.FromArgb(Math.Max(0, a), 255, 255, 255)))
+                        {
+                            g.FillEllipse(sb, sx - sr, sy - sr * 0.7f, sr * 2f, sr * 1.4f);
+                        }
+                    }
+                }
+                else if (type == "redbauble" || type == "goldbauble")
+                {
+                    // Shimmering twinkle glint on the glossy bauble highlight
+                    float tw = (float)(0.5 + 0.5 * Math.Sin(animTick * 2.4f + cx * 0.05f));
+                    if (tw > 0.35f)
+                    {
+                        float gx = cx - w * 0.16f;
+                        float gy = cy - h * 0.08f;
+                        float ray = 4.0f * tw;
+                        using (Pen gp = new Pen(Color.FromArgb((int)(210 * tw), 255, 255, 255), 1.3f))
+                        {
+                            gp.StartCap = LineCap.Round;
+                            gp.EndCap = LineCap.Round;
+                            g.DrawLine(gp, gx - ray, gy, gx + ray, gy);
+                            g.DrawLine(gp, gx, gy - ray, gx, gy + ray);
+                        }
+                    }
+                }
                 return;
             }
 
@@ -1616,6 +1688,40 @@ namespace BoWeather
             }
 
             return null;
+        }
+
+        public bool AdjustScaleAt(float mouseX, float mouseY, int wheelDelta)
+        {
+            int unused;
+            object hit = HitTest(mouseX, mouseY, out unused);
+            if (hit == null) return false;
+
+            float step = (wheelDelta > 0) ? 0.12f : -0.12f;
+            if (hit is ChristmasTreeItem)
+            {
+                ChristmasTreeItem t = (ChristmasTreeItem)hit;
+                t.Scale = Math.Max(0.60f, Math.Min(2.20f, t.Scale + step));
+                return true;
+            }
+            if (hit is ChristmasStarItem)
+            {
+                ChristmasStarItem s = (ChristmasStarItem)hit;
+                s.Scale = Math.Max(0.60f, Math.Min(2.20f, s.Scale + step));
+                return true;
+            }
+            if (hit is ChristmasGiftItem)
+            {
+                ChristmasGiftItem g = (ChristmasGiftItem)hit;
+                g.Scale = Math.Max(0.60f, Math.Min(2.20f, g.Scale + step));
+                return true;
+            }
+            if (hit is ChristmasOrnamentItem)
+            {
+                ChristmasOrnamentItem o = (ChristmasOrnamentItem)hit;
+                o.Scale = Math.Max(0.60f, Math.Min(2.20f, o.Scale + step));
+                return true;
+            }
+            return false;
         }
 
         public void StartDrag(object hit, int hitPart, float mouseX, float mouseY)

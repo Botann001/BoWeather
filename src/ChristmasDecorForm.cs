@@ -11,6 +11,7 @@ namespace BoWeather
         private readonly ChristmasManager _mgr;
         private readonly OverlayForm _overlay;
         private readonly bool _isDarkMode;
+        private readonly bool _isIndonesian;
 
         // Form Layout
         private Rectangle _headerIconRect;
@@ -33,12 +34,20 @@ namespace BoWeather
             "santahat", "snowglobe", "cocoa", "boat"
         };
 
-        private readonly string[] _tileLabels = new string[]
+        private readonly string[] _tileLabelsEn = new string[]
         {
             "Lights", "Candle", "Red bauble", "Gold bauble",
             "Star", "Wreath", "Stocking", "Candy cane",
             "Gift", "Bells", "Gingerbread", "Holly",
             "Santa hat", "Snow globe", "Cocoa", "Boat"
+        };
+
+        private readonly string[] _tileLabelsId = new string[]
+        {
+            "Lampu", "Lilin", "Bola Merah", "Bola Emas",
+            "Bintang", "Karangan", "Kaus Kaki", "Permen",
+            "Kado", "Lonceng", "Kue Jahe", "Daun Holly",
+            "Topi Santa", "Bola Salju", "Cokelat", "Perahu"
         };
 
         // Gift color cycler
@@ -82,11 +91,12 @@ namespace BoWeather
         private readonly Font _footerCountFont;
         private readonly Font _btnFont;
 
-        public ChristmasDecorForm(ChristmasManager mgr, OverlayForm overlay, bool isDarkMode)
+        public ChristmasDecorForm(ChristmasManager mgr, OverlayForm overlay, bool isDarkMode, bool isIndonesian = false)
         {
             _mgr = mgr;
             _overlay = overlay;
             _isDarkMode = isDarkMode;
+            _isIndonesian = isIndonesian;
 
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
@@ -95,8 +105,8 @@ namespace BoWeather
             DoubleBuffered = true;
 
             Size = new Size(440, 640);
-            BackColor = Color.FromArgb(18, 22, 34);
-            Opacity = 0.95;
+            BackColor = _isDarkMode ? Color.FromArgb(18, 22, 34) : Color.FromArgb(245, 249, 255);
+            Opacity = 0.96;
 
             // Clip exact rounded corners so zero white pixels peek through
             UpdateRegion();
@@ -166,8 +176,8 @@ namespace BoWeather
             // 4. Footer Bar
             int footerY = ClientSize.Height - 48;
             _footerRect = new Rectangle(pad, footerY, w - pad * 2, 36);
-            _behindToggleRect = new Rectangle(_footerRect.X + 106, footerY + 4, 142, 28);
-            int takeBtnW = 132;
+            _behindToggleRect = new Rectangle(_footerRect.X + 102, footerY + 4, 156, 28);
+            int takeBtnW = 140;
             _btnTakeAllDownRect = new Rectangle(_footerRect.Right - takeBtnW, footerY + 2, takeBtnW, 32);
         }
 
@@ -181,13 +191,16 @@ namespace BoWeather
             int w = ClientSize.Width;
             int h = ClientSize.Height;
 
-            // 1. Frosted Glass Body Gradient (Deep blue-gray frosted look matching photo 2)
+            Color textMain = _isDarkMode ? Color.White : Color.FromArgb(22, 28, 42);
+            Color textSub = _isDarkMode ? Color.FromArgb(190, 212, 240) : Color.FromArgb(80, 96, 122);
+            Color textMuted = _isDarkMode ? Color.FromArgb(175, 200, 230) : Color.FromArgb(95, 112, 138);
+
+            // 1. Frosted Glass Body Gradient (Dark or Light mode adaptive)
             using (GraphicsPath formPath = VectorIcons.CreateRoundedRect(new RectangleF(0.5f, 0.5f, w - 1f, h - 1f), 24f))
             {
-                using (LinearGradientBrush bgBrush = new LinearGradientBrush(
-                    new PointF(0, 0), new PointF(0, h),
-                    Color.FromArgb(250, 20, 26, 42),
-                    Color.FromArgb(252, 12, 16, 26)))
+                Color bgTop = _isDarkMode ? Color.FromArgb(250, 20, 26, 42) : Color.FromArgb(250, 246, 250, 255);
+                Color bgBot = _isDarkMode ? Color.FromArgb(252, 12, 16, 26) : Color.FromArgb(252, 232, 240, 252);
+                using (LinearGradientBrush bgBrush = new LinearGradientBrush(new PointF(0, 0), new PointF(0, h), bgTop, bgBot))
                 {
                     g.FillPath(bgBrush, formPath);
                 }
@@ -198,35 +211,36 @@ namespace BoWeather
                 // Top Specular Highlight sheen
                 using (LinearGradientBrush topSheen = new LinearGradientBrush(
                     new PointF(0, 0), new PointF(0, 75),
-                    Color.FromArgb(45, 255, 255, 255),
+                    Color.FromArgb(_isDarkMode ? 42 : 95, 255, 255, 255),
                     Color.Transparent))
                 {
                     g.FillRectangle(topSheen, 0, 0, w, 75);
                 }
 
                 // Smooth Ice-Blue Border
-                using (Pen borderPen = new Pen(Color.FromArgb(60, 130, 200, 255), 1.2f))
+                using (Pen borderPen = new Pen(_isDarkMode ? Color.FromArgb(60, 130, 200, 255) : Color.FromArgb(90, 140, 185, 235), 1.2f))
                 {
                     g.DrawPath(borderPen, formPath);
                 }
             }
 
             // 2. Header Area
-            // Cute 3D Tree Icon on left of header
             if (!ChristmasAssets.DrawTreeHeader(g, _headerIconRect.X + 18f, _headerIconRect.Y + 22f, 32f, 38f))
             {
                 DrawMiniTree(g, _headerIconRect.X + 18f, _headerIconRect.Y + 34f, 28f, 36f);
             }
 
-            // Title: Christmas Decorations
-            using (SolidBrush tb = new SolidBrush(Color.White))
+            string titleStr = _isIndonesian ? "Dekorasi Natal" : "Christmas Decorations";
+            string subStr = _isIndonesian
+                ? "Tambahkan dekorasi meriah agar desktop terasa\nlebih hangat & nyaman! (Scroll untuk ubah ukuran)"
+                : "Add festive decorations to make your desktop\nmore merry and cozy! (Scroll items to resize)";
+            using (SolidBrush tb = new SolidBrush(textMain))
             {
-                g.DrawString("Christmas Decorations", _headerTitleFont, tb, _headerTextRect.X, _headerTextRect.Y + 2);
+                g.DrawString(titleStr, _headerTitleFont, tb, _headerTextRect.X, _headerTextRect.Y + 2);
             }
-            // Subtitle: Add festive decorations to make your desktop more merry and cozy!
-            using (SolidBrush sb = new SolidBrush(Color.FromArgb(195, 215, 240)))
+            using (SolidBrush sb = new SolidBrush(textSub))
             {
-                g.DrawString("Add festive decorations to make your desktop\nmore merry and cozy!", _headerSubFont, sb, _headerTextRect.X, _headerTextRect.Y + 22);
+                g.DrawString(subStr, _headerSubFont, sb, _headerTextRect.X, _headerTextRect.Y + 22);
             }
 
             // Close button (✕)
@@ -234,12 +248,12 @@ namespace BoWeather
             {
                 if (_hoverClose)
                 {
-                    using (SolidBrush ch = new SolidBrush(Color.FromArgb(60, 255, 255, 255)))
+                    using (SolidBrush ch = new SolidBrush(Color.FromArgb(_isDarkMode ? 60 : 30, _isDarkMode ? 255 : 0, _isDarkMode ? 255 : 0, _isDarkMode ? 255 : 0)))
                     {
                         g.FillPath(ch, closePath);
                     }
                 }
-                using (Pen xp = new Pen(_hoverClose ? Color.White : Color.FromArgb(210, 225, 245), 1.8f))
+                using (Pen xp = new Pen(_hoverClose ? textMain : textSub, 1.8f))
                 {
                     xp.StartCap = LineCap.Round;
                     xp.EndCap = LineCap.Round;
@@ -249,11 +263,14 @@ namespace BoWeather
             }
 
             // 3. Hero Card: Christmas Tree
-            Color heroBg = _hoverHero ? Color.FromArgb(170, 36, 46, 68) : Color.FromArgb(120, 26, 34, 52);
+            Color heroBg = _isDarkMode
+                ? (_hoverHero ? Color.FromArgb(170, 36, 46, 68) : Color.FromArgb(120, 26, 34, 52))
+                : (_hoverHero ? Color.FromArgb(220, 255, 255, 255) : Color.FromArgb(180, 255, 255, 255));
+            Color heroBorder = _isDarkMode ? Color.FromArgb(45, 140, 210, 255) : Color.FromArgb(80, 150, 190, 235);
             using (GraphicsPath hp = VectorIcons.CreateRoundedRect(_heroCardRect, 16f))
             {
                 using (SolidBrush hb = new SolidBrush(heroBg)) g.FillPath(hb, hp);
-                using (Pen hpen = new Pen(Color.FromArgb(45, 140, 210, 255), 1.1f)) g.DrawPath(hpen, hp);
+                using (Pen hpen = new Pen(heroBorder, 1.1f)) g.DrawPath(hpen, hp);
             }
 
             // 3D Tree preview inside hero card
@@ -264,18 +281,23 @@ namespace BoWeather
 
             // Tree labels
             int heroTextX = _heroCardRect.X + 76;
-            using (SolidBrush tb = new SolidBrush(Color.White))
+            string heroTitle = _isIndonesian ? "Pohon Natal" : "Christmas tree";
+            string heroSub = _isIndonesian
+                ? "Pohon Natal 3D lengkap dengan lampu kelap-kelip & ornamen."
+                : "A beautiful 3D Christmas tree with lights and ornaments.";
+            using (SolidBrush tb = new SolidBrush(textMain))
             {
-                g.DrawString("Christmas tree", _heroTitleFont, tb, heroTextX, _heroCardRect.Y + 16);
+                g.DrawString(heroTitle, _heroTitleFont, tb, heroTextX, _heroCardRect.Y + 16);
             }
-            using (SolidBrush sb = new SolidBrush(Color.FromArgb(175, 200, 230)))
+            using (SolidBrush sb = new SolidBrush(textMuted))
             {
                 Rectangle textR = new Rectangle(heroTextX, _heroCardRect.Y + 38, _heroCardRect.Width - 176, 32);
-                g.DrawString("A beautiful 3D Christmas tree with lights and ornaments.", _heroSubFont, sb, textR);
+                g.DrawString(heroSub, _heroSubFont, sb, textR);
             }
 
-            // + Add (1) button on hero card (Emerald Green Pill with soft glow)
-            string addText = _mgr.Trees.Count > 0 ? "+ Add (" + _mgr.Trees.Count + ")" : "+ Add";
+            // + Add button on hero card
+            string addWord = _isIndonesian ? "+ Tambah" : "+ Add";
+            string addText = _mgr.Trees.Count > 0 ? addWord + " (" + _mgr.Trees.Count + ")" : addWord;
             using (GraphicsPath pbp = VectorIcons.CreateRoundedRect(_btnPlantRect, 16f))
             {
                 using (LinearGradientBrush addBrush = new LinearGradientBrush(
@@ -300,14 +322,19 @@ namespace BoWeather
             }
 
             // 4. Grid of 16 Tiles (4x4)
+            string[] activeLabels = _isIndonesian ? _tileLabelsId : _tileLabelsEn;
             for (int i = 0; i < TOTAL_TILES; i++)
             {
                 Rectangle tr = _tileRects[i];
                 bool isHover = (_hoveredTile == i);
                 string id = _tileIds[i];
 
-                Color tileBg = isHover ? Color.FromArgb(190, 42, 54, 78) : Color.FromArgb(115, 26, 34, 50);
-                Color tileBorder = isHover ? Color.FromArgb(110, 160, 235, 255) : Color.FromArgb(35, 130, 190, 240);
+                Color tileBg = _isDarkMode
+                    ? (isHover ? Color.FromArgb(190, 42, 54, 78) : Color.FromArgb(115, 26, 34, 50))
+                    : (isHover ? Color.FromArgb(240, 255, 255, 255) : Color.FromArgb(185, 255, 255, 255));
+                Color tileBorder = _isDarkMode
+                    ? (isHover ? Color.FromArgb(110, 160, 235, 255) : Color.FromArgb(35, 130, 190, 240))
+                    : (isHover ? Color.FromArgb(150, 10, 111, 214) : Color.FromArgb(65, 160, 190, 225));
 
                 using (GraphicsPath tp = VectorIcons.CreateRoundedRect(tr, 14f))
                 {
@@ -324,26 +351,26 @@ namespace BoWeather
                 }
 
                 // Tile Label in lower area
-                using (SolidBrush lb = new SolidBrush(Color.FromArgb(240, 245, 255)))
+                using (SolidBrush lb = new SolidBrush(_isDarkMode ? Color.FromArgb(240, 245, 255) : textMain))
                 {
                     StringFormat lsf = new StringFormat();
                     lsf.Alignment = StringAlignment.Center;
                     lsf.LineAlignment = StringAlignment.Center;
                     Rectangle lr = new Rectangle(tr.X, tr.Bottom - 24, tr.Width, 20);
-                    g.DrawString(_tileLabels[i], _tileLabelFont, lb, lr, lsf);
+                    g.DrawString(activeLabels[i], _tileLabelFont, lb, lr, lsf);
                 }
             }
 
             // 5. Footer Bar
-            // Left: {count} of 30 up
-            using (SolidBrush fb = new SolidBrush(Color.FromArgb(185, 205, 230)))
+            string countText = _isIndonesian ? (_mgr.TotalItemCount + "/30 terpasang") : (_mgr.TotalItemCount + " of 30 up");
+            using (SolidBrush fb = new SolidBrush(textMuted))
             {
-                g.DrawString(_mgr.TotalItemCount + " of 30 up", _footerCountFont, fb, _footerRect.X + 4, _footerRect.Y + 8);
+                g.DrawString(countText, _footerCountFont, fb, _footerRect.X + 4, _footerRect.Y + 8);
             }
 
             // Middle: Behind windows toggle
             bool isBehind = _mgr.BehindActiveWindows;
-            Color togBg = _hoverBehind ? Color.FromArgb(45, 255, 255, 255) : Color.Transparent;
+            Color togBg = _hoverBehind ? Color.FromArgb(_isDarkMode ? 45 : 22, _isDarkMode ? 255 : 0, _isDarkMode ? 255 : 0, _isDarkMode ? 255 : 0) : Color.Transparent;
             using (GraphicsPath bp = VectorIcons.CreateRoundedRect(_behindToggleRect, 8f))
             {
                 if (_hoverBehind)
@@ -351,7 +378,7 @@ namespace BoWeather
                     using (SolidBrush bgb = new SolidBrush(togBg)) g.FillPath(bgb, bp);
                 }
             }
-            Color checkCol = isBehind ? Color.FromArgb(34, 197, 94) : Color.FromArgb(160, 180, 205);
+            Color checkCol = isBehind ? Color.FromArgb(34, 197, 94) : textMuted;
             using (Pen cp = new Pen(checkCol, 1.6f))
             {
                 g.DrawRectangle(cp, _behindToggleRect.X + 4, _behindToggleRect.Y + 7, 13, 13);
@@ -361,25 +388,31 @@ namespace BoWeather
                     g.DrawLine(cp, _behindToggleRect.X + 9, _behindToggleRect.Y + 17, _behindToggleRect.X + 15, _behindToggleRect.Y + 9);
                 }
             }
-            using (SolidBrush tb = new SolidBrush(isBehind ? Color.White : Color.FromArgb(185, 205, 230)))
+            string behindLabel = _isIndonesian ? "Di belakang window" : "Behind windows";
+            using (SolidBrush tb = new SolidBrush(isBehind ? textMain : textMuted))
             {
-                g.DrawString("Behind windows", _tileLabelFont, tb, _behindToggleRect.X + 22, _behindToggleRect.Y + 6);
+                g.DrawString(behindLabel, _tileLabelFont, tb, _behindToggleRect.X + 22, _behindToggleRect.Y + 6);
             }
 
-            // Right: Take all down button with down arrow
-            Color takeBg = _hoverTakeAll ? Color.FromArgb(70, 220, 38, 38) : Color.FromArgb(50, 40, 52, 72);
-            Color takeBorder = _hoverTakeAll ? Color.FromArgb(220, 38, 38) : Color.FromArgb(50, 160, 220, 255);
+            // Right: Take all down button
+            Color takeBg = _hoverTakeAll
+                ? Color.FromArgb(70, 220, 38, 38)
+                : (_isDarkMode ? Color.FromArgb(50, 40, 52, 72) : Color.FromArgb(25, 22, 32, 55));
+            Color takeBorder = _hoverTakeAll
+                ? Color.FromArgb(220, 38, 38)
+                : (_isDarkMode ? Color.FromArgb(50, 160, 220, 255) : Color.FromArgb(65, 140, 175, 220));
             using (GraphicsPath tap = VectorIcons.CreateRoundedRect(_btnTakeAllDownRect, 16f))
             {
                 using (SolidBrush tab = new SolidBrush(takeBg)) g.FillPath(tab, tap);
                 using (Pen tapen = new Pen(takeBorder, 1.1f)) g.DrawPath(tapen, tap);
             }
-            using (SolidBrush tat = new SolidBrush(_hoverTakeAll ? Color.FromArgb(255, 100, 100) : Color.White))
+            string takeLabel = _isIndonesian ? "\u2193 Bereskan" : "\u2193 Take all down";
+            using (SolidBrush tat = new SolidBrush(_hoverTakeAll ? Color.FromArgb(235, 60, 60) : textMain))
             {
                 StringFormat csf = new StringFormat();
                 csf.Alignment = StringAlignment.Center;
                 csf.LineAlignment = StringAlignment.Center;
-                g.DrawString("\u2193 Take all down", _btnFont, tat, _btnTakeAllDownRect, csf);
+                g.DrawString(takeLabel, _btnFont, tat, _btnTakeAllDownRect, csf);
             }
         }
 
@@ -1099,6 +1132,16 @@ namespace BoWeather
 
         private void HandleTileClick(string id, Rectangle screen, int floorY)
         {
+            // Automatically ensure snow mode is visible when adding decorations
+            if (_overlay != null && _overlay.Particles != null)
+            {
+                if (_overlay.Particles.CurrentEffect != EffectType.Snow || _overlay.IsPaused)
+                {
+                    _overlay.IsPaused = false;
+                    _overlay.Particles.SwitchEffect(EffectType.Snow);
+                }
+            }
+
             float rndOffset = (_mgr.TotalItemCount * 55f) % (screen.Width * 0.35f);
 
             switch (id)
