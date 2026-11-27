@@ -102,6 +102,9 @@ namespace BoWeather
                     case "refresh":
                         DrawRefresh(g, pen);
                         break;
+                    case "snowplow":
+                        DrawSnowplow(g, pen, fillColor);
+                        break;
                 }
             }
 
@@ -507,6 +510,23 @@ namespace BoWeather
             // Arrowhead at top
             g.DrawLine(pen, 16f, 4f, 18.5f, 7.5f);
             g.DrawLine(pen, 18.5f, 7.5f, 14.5f, 8.5f);
+        }
+
+        private static void DrawSnowplow(Graphics g, Pen pen, Color fillColor)
+        {
+            // Cab & hood
+            g.DrawRectangle(pen, 4f, 9f, 11f, 6f);
+            g.DrawRectangle(pen, 6f, 5f, 6f, 4f);
+            // Beacon dot
+            using (SolidBrush b = new SolidBrush(fillColor))
+            {
+                g.FillEllipse(b, 8f, 2.5f, 2f, 2f);
+            }
+            // Caterpillar track
+            g.DrawEllipse(pen, 3.5f, 15f, 12f, 4.5f);
+            // Curved plow blade in front
+            g.DrawArc(pen, 15f, 11f, 6f, 8.5f, 140f, 110f);
+            g.DrawLine(pen, 15f, 14f, 17.5f, 14f);
         }
 
         public static GraphicsPath CreateRoundedRect(RectangleF r, float radius)

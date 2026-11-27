@@ -494,6 +494,14 @@ namespace BoWeather
                             return (IntPtr)1; // Consume event! No Desktop Selection Box!
                         }
 
+                        // 1.2. Did the user click the Snowplow truck? (Left click reverses direction)
+                        if (_particleSystem.Snowplow != null && _particleSystem.Snowplow.HitTest(mouseX, mouseY))
+                        {
+                            _particleSystem.Snowplow.ReverseDirection();
+                            _particleSystem.SpawnSnowPuff(mouseX, mouseY, 12);
+                            return (IntPtr)1;
+                        }
+
                         // 1.5. Did the user click on a Christmas accessory (Delete button, Light handle, Tree, Star, or Gift)?
                         bool canInteractChristmas = true;
                         if (_particleSystem.Christmas != null && _particleSystem.Christmas.BehindActiveWindows)
@@ -634,6 +642,15 @@ namespace BoWeather
                                 _particleSystem.SpawnSnowPuff(mouseX, mouseY, 20);
                                 return (IntPtr)1;
                             }
+                        }
+
+                        // Right-click Snowplow truck -> toggle Turbo boost!
+                        if (_particleSystem.Snowplow != null && _particleSystem.Snowplow.HitTest(mouseX, mouseY))
+                        {
+                            _isRightClickInteracting = true;
+                            _particleSystem.Snowplow.IsTurbo = !_particleSystem.Snowplow.IsTurbo;
+                            _particleSystem.SpawnSnowPuff(mouseX, mouseY, 16);
+                            return (IntPtr)1;
                         }
 
                         Snowball hit = _particleSystem.Snowballs.HitTest(mouseX, mouseY);

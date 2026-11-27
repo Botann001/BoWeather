@@ -32,10 +32,18 @@ namespace BoWeather.Particles
         private int _prevMouseY = -1;
         private readonly SnowballManager _snowballManager = new SnowballManager();
         private readonly ChristmasManager _christmasManager = new ChristmasManager();
+        private readonly SnowplowManager _snowplowManager = new SnowplowManager();
         private readonly List<FallingSnowShelf> _fallingSnowShelves = new List<FallingSnowShelf>();
 
         public SnowballManager Snowballs { get { return _snowballManager; } }
         public ChristmasManager Christmas { get { return _christmasManager; } }
+        public SnowplowManager Snowplow { get { return _snowplowManager; } }
+
+        public void SummonSnowplow()
+        {
+            int groundY = (_taskbarTop > 100 && _taskbarTop < _screenHeight) ? _taskbarTop : _screenHeight;
+            _snowplowManager.Summon(_screenWidth, groundY);
+        }
 
         private bool _isMeltingSnow = false;
 
@@ -491,11 +499,12 @@ namespace BoWeather.Particles
             // Snow scooping is exclusively handled during active snowball rolling, keeping resting snow mounds pristine and pillowy
             // UpdateMouseSnowSweep(winMgr, mouseX, mouseY);
 
-            // Update interactive snowball rolling, dragging, stacking and snowmen!
-            if (_currentEffect == EffectType.Snow || _isMeltingSnow || _snowballManager.Count > 0)
+            // Update interactive snowball rolling, dragging, stacking, snowmen, and snowplow!
+            if (_currentEffect == EffectType.Snow || _isMeltingSnow || _snowballManager.Count > 0 || _snowplowManager.IsActive)
             {
                 _snowballManager.Update(winMgr, mouseX, mouseY, isMouseDown, _screenWidth, _screenHeight, groundY, SpawnSnowPuff);
                 _christmasManager.Update(winMgr, _screenWidth, _screenHeight, groundY, SpawnSnowPuff);
+                _snowplowManager.Update(winMgr, _snowballManager, _currentEffect, _enableWindowPhysics, _screenWidth, groundY, SpawnSnowPuff);
             }
 
             for (int i = _particles.Count - 1; i >= 0; i--)
@@ -969,7 +978,7 @@ namespace BoWeather.Particles
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             // 1. Draw Puffy Snow Caps ONLY on Floating Windows, Falling Shelves and Floor
-            if ((_currentEffect == EffectType.Snow || _isMeltingSnow || _snowballManager.Count > 0 || _fallingSnowShelves.Count > 0) && _enableWindowPhysics && winMgr != null)
+            if ((_currentEffect == EffectType.Snow || _isMeltingSnow || _snowballManager.Count > 0 || _fallingSnowShelves.Count > 0 || _snowplowManager.IsActive) && _enableWindowPhysics && winMgr != null)
             {
                 List<WindowInfo> windows = winMgr.ActiveWindows;
                 for (int w = 0; w < windows.Count; w++)
@@ -994,6 +1003,9 @@ namespace BoWeather.Particles
                     int floorY = (_taskbarTop > 100 && _taskbarTop < _screenHeight) ? _taskbarTop : _screenHeight;
                     DrawPuffySnowCap(g, 0, floorY, _screenWidth, winMgr.FloorSnowPoints, false);
                 }
+
+                // Draw Yellow Tracked Snowplow right along taskbar snow
+                _snowplowManager.Draw(g);
 
                 // Draw Interactive Snowballs and Snowmen!
                 _snowballManager.Draw(g);

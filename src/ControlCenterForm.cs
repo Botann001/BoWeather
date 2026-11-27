@@ -62,16 +62,18 @@ namespace BoWeather
         private Rectangle _physicsRowRect;
         private Rectangle _autoPauseRowRect;
         private Rectangle _autoWallpaperRowRect;
+        private Rectangle _snowplowRowRect;
         private Rectangle _btnApplyWallRect;
         private Rectangle _btnBrowseWallRect;
         private Rectangle _btnLangRect;
         private Rectangle _btnExitRect;
         private Rectangle _btnChristmasRect;
+        private Rectangle _btnSnowplowRect;
 
         // Hover & Drag states
         private int _hoveredTile = -1;
-        private int _hoveredRow = -1;    // 0=physics, 1=autopause, 2=autowall
-        private int _hoveredBtn = -1;    // 0=apply, 1=browse, 2=lang, 3=exit, 4=xmas
+        private int _hoveredRow = -1;    // 0=physics, 1=autopause, 2=autowall, 3=snowplow
+        private int _hoveredBtn = -1;    // 0=apply, 1=browse, 2=lang, 3=exit, 4=xmas, 5=snowplow
         private bool _hoverMode = false;
         private bool _hoverClose = false;
         private bool _draggingWind = false;
@@ -95,8 +97,8 @@ namespace BoWeather
             StartPosition = FormStartPosition.Manual;
             DoubleBuffered = true;
 
-            // Dimensions from DESIGN-SPEC.md: Width 392 px, Height 736 px
-            Size = new Size(392, 736);
+            // Dimensions: Width 392 px, Height 720 px (fits comfortably within 1280x800 working area)
+            Size = new Size(392, 720);
             UpdateThemeAppearance();
 
             // Fonts matching typography specification (Inter or Segoe UI fallback)
@@ -193,8 +195,8 @@ namespace BoWeather
         private void CalculateLayout()
         {
             int w = ClientSize.Width;
-            int pad = 18;
-            int gap = 16;
+            int pad = 16;
+            int gap = 12;
 
             // 1. Header (Height: 32)
             int headerY = pad;
@@ -202,12 +204,12 @@ namespace BoWeather
             _closeBtnRect = new Rectangle(w - pad - btnSize, headerY, btnSize, btnSize);
             _modeBtnRect = new Rectangle(w - pad - btnSize - 6 - btnSize, headerY, btnSize, btnSize);
 
-            // 2. Grid Tiles: 3 cols x 2 rows (gap 8, height 68)
+            // 2. Grid Tiles: 3 cols x 2 rows (gap 8, height 64)
             int tileStartTop = headerY + 32 + gap;
             int tileGap = 8;
             int contentW = w - (pad * 2);
-            int tileW = (contentW - (tileGap * 2)) / 3; // 113px
-            int tileH = 68;
+            int tileW = (contentW - (tileGap * 2)) / 3;
+            int tileH = 64;
 
             for (int i = 0; i < 6; i++)
             {
@@ -219,33 +221,35 @@ namespace BoWeather
                 _tileRects[i] = new Rectangle(tx, ty, thisW, tileH);
             }
 
-            // 3. Sliders (Track height 8, row height 24, track area 26)
+            // 3. Sliders (Track height 8, row height 22, track area 24)
             int slidersTop = tileStartTop + (2 * tileH) + tileGap + gap;
-            _windTrackRect = new Rectangle(pad, slidersTop + 24 + 6, contentW, 26);
+            _windTrackRect = new Rectangle(pad, slidersTop + 22 + 4, contentW, 24);
 
-            int densityTop = slidersTop + 24 + 6 + 26 + 14;
-            _densityTrackRect = new Rectangle(pad, densityTop + 24 + 6, contentW, 26);
+            int densityTop = slidersTop + 22 + 4 + 24 + 10;
+            _densityTrackRect = new Rectangle(pad, densityTop + 22 + 4, contentW, 24);
 
-            // 4. Toggles Container Card (padding 4, radius 18, 3 rows of 58)
-            int togglesTop = densityTop + 24 + 6 + 26 + gap;
+            // 4. Toggles Container Card (padding 4, radius 18, 4 rows of 50)
+            int togglesTop = densityTop + 22 + 4 + 24 + gap;
             int cardPad = 4;
-            int rowH = 58;
-            int containerH = cardPad * 2 + rowH * 3 + 2; // ~184 px
+            int rowH = 50;
+            int containerH = cardPad * 2 + rowH * 4 + 3; // 211 px
             _togglesContainerRect = new Rectangle(pad, togglesTop, contentW, containerH);
 
             _physicsRowRect = new Rectangle(pad + cardPad, togglesTop + cardPad, contentW - cardPad * 2, rowH);
             _autoPauseRowRect = new Rectangle(pad + cardPad, _physicsRowRect.Bottom + 1, contentW - cardPad * 2, rowH);
             _autoWallpaperRowRect = new Rectangle(pad + cardPad, _autoPauseRowRect.Bottom + 1, contentW - cardPad * 2, rowH);
+            _snowplowRowRect = new Rectangle(pad + cardPad, _autoWallpaperRowRect.Bottom + 1, contentW - cardPad * 2, rowH);
 
-            // 4.5. Christmas Decor Button (Full Width, Height 44, Radius 14)
-            int xmasTop = togglesTop + containerH + gap;
-            _btnChristmasRect = new Rectangle(pad, xmasTop, contentW, 44);
-
-            // 5. Action Buttons (2x2 grid, height 44, gap 8, radius 14)
-            int actionsTop = _btnChristmasRect.Bottom + gap;
+            // 4.5. Feature Buttons Row: Christmas Decor | Summon Snowplow (Half Width each, Height 42, Radius 14)
+            int featTop = togglesTop + containerH + gap;
             int btnGap = 8;
             int btnW = (contentW - btnGap) / 2;
-            int btnH = 44;
+            int btnH = 42;
+            _btnChristmasRect = new Rectangle(pad, featTop, btnW, btnH);
+            _btnSnowplowRect = new Rectangle(pad + btnW + btnGap, featTop, contentW - btnW - btnGap, btnH);
+
+            // 5. Action Buttons (2x2 grid, height 42, gap 8, radius 14)
+            int actionsTop = featTop + btnH + gap;
 
             _btnApplyWallRect = new Rectangle(pad, actionsTop, btnW, btnH);
             _btnBrowseWallRect = new Rectangle(pad + btnW + btnGap, actionsTop, contentW - btnW - btnGap, btnH);
@@ -380,7 +384,7 @@ namespace BoWeather
             // 2. Header
             using (SolidBrush tb = new SolidBrush(textMain))
             {
-                g.DrawString("BoWeather Control Center", _titleFont, tb, 18, 23);
+                g.DrawString("BoWeather Control Center", _titleFont, tb, 16, 21);
             }
 
             // Header Mode Toggle Button (Moon / Sun)
@@ -497,6 +501,7 @@ namespace BoWeather
             bool physicsOn = _overlay.Particles.EnableWindowPhysics;
             bool autoPauseOn = _overlay.AutoPauseOnFullscreenGame;
             bool autoWallOn = _trayManager.IsAutoWallpaperEnabled;
+            bool autoPlowOn = _overlay.Particles.Snowplow != null && _overlay.Particles.Snowplow.AutoPatrolEnabled;
 
             // Row 0: Window Physics
             DrawToggleRow(g, _physicsRowRect, "physics", "Window Physics",
@@ -525,12 +530,33 @@ namespace BoWeather
                 isId ? "Ganti otomatis ikut tema & waktu" : "Auto-switch wallpaper by time",
                 autoWallOn, _hoveredRow == 2, iconBoxBg, swoffBg, accentColor, textMain, textSub);
 
-            // 5.5. Christmas Accessories Button
+            // Divider 3
+            using (Pen divPen = new Pen(dividerColor, 1f))
+            {
+                g.DrawLine(divPen, _togglesContainerRect.Left + 12, _autoWallpaperRowRect.Bottom, _togglesContainerRect.Right - 12, _autoWallpaperRowRect.Bottom);
+            }
+
+            // Row 3: Truk Salju Otomatis
+            DrawToggleRow(g, _snowplowRowRect, "snowplow", isId ? "Truk Salju Otomatis" : "Auto Snowplow Patrol",
+                isId ? "Bersihkan salju taskbar berkala" : "Auto-clear taskbar snow periodically",
+                autoPlowOn, _hoveredRow == 3, iconBoxBg, swoffBg, accentColor, textMain, textSub);
+
+            // 5.5. Feature Buttons Row: Christmas Decor | Summon Snowplow
             Color xmasBg = _isDarkMode ? Color.FromArgb(200, 20, 80, 48) : Color.FromArgb(240, 220, 248, 230);
             Color xmasHover = _isDarkMode ? Color.FromArgb(250, 28, 105, 62) : Color.FromArgb(255, 200, 240, 215);
             Color xmasFg = _isDarkMode ? Color.White : Color.FromArgb(255, 15, 80, 35);
-            DrawActionButton(g, _btnChristmasRect, "tree", isId ? "Dekorasi Natal…" : "Christmas Decor…",
+            DrawActionButton(g, _btnChristmasRect, "tree", isId ? "Dekorasi Natal…" : "Christmas…",
                 xmasBg, xmasFg, _hoveredBtn == 4 ? xmasHover : xmasBg, false);
+
+            bool plowActive = _overlay.Particles.Snowplow != null && _overlay.Particles.Snowplow.IsActive;
+            Color plowBg = _isDarkMode ? Color.FromArgb(215, 180, 95, 10) : Color.FromArgb(245, 254, 240, 195);
+            Color plowHover = _isDarkMode ? Color.FromArgb(255, 217, 119, 6) : Color.FromArgb(255, 253, 230, 155);
+            Color plowFg = _isDarkMode ? Color.White : Color.FromArgb(255, 146, 64, 14);
+            string plowBtnText = plowActive
+                ? (isId ? "Truk Turbo!" : "Turbo Plow!")
+                : (isId ? "Panggil Truk" : "Call Snowplow");
+            DrawActionButton(g, _btnSnowplowRect, "snowplow", plowBtnText,
+                plowBg, plowFg, _hoveredBtn == 5 ? plowHover : plowBg, false);
 
             // 6. Action Buttons 2x2 Grid (Radius 14)
             // Button 0: Terapkan Wallpaper (Accent Blue, turns into "Diterapkan" on click)
@@ -618,11 +644,11 @@ namespace BoWeather
             int textX = boxX + boxSize + 12;
             using (SolidBrush tb = new SolidBrush(textMain))
             {
-                g.DrawString(title, _labelFont, tb, textX, r.Top + 9);
+                g.DrawString(title, _labelFont, tb, textX, r.Top + 6);
             }
             using (SolidBrush sb = new SolidBrush(textSub))
             {
-                g.DrawString(sub, _subLabelFont, sb, textX, r.Top + 30);
+                g.DrawString(sub, _subLabelFont, sb, textX, r.Top + 26);
             }
 
             // iOS / Win11 Modern Switch: 44x26 px, radius 13 px
@@ -723,6 +749,7 @@ namespace BoWeather
             if (_physicsRowRect.Contains(pt)) newRow = 0;
             else if (_autoPauseRowRect.Contains(pt)) newRow = 1;
             else if (_autoWallpaperRowRect.Contains(pt)) newRow = 2;
+            else if (_snowplowRowRect.Contains(pt)) newRow = 3;
             if (newRow != _hoveredRow) { _hoveredRow = newRow; needRepaint = true; }
 
             // Buttons
@@ -732,6 +759,7 @@ namespace BoWeather
             else if (_btnLangRect.Contains(pt)) newBtn = 2;
             else if (_btnExitRect.Contains(pt)) newBtn = 3;
             else if (_btnChristmasRect.Contains(pt)) newBtn = 4;
+            else if (_btnSnowplowRect.Contains(pt)) newBtn = 5;
             if (newBtn != _hoveredBtn) { _hoveredBtn = newBtn; needRepaint = true; }
 
             // Cursor
@@ -831,11 +859,29 @@ namespace BoWeather
                 Invalidate();
                 return;
             }
+            if (_snowplowRowRect.Contains(pt) && _overlay.Particles.Snowplow != null)
+            {
+                _overlay.Particles.Snowplow.AutoPatrolEnabled = !_overlay.Particles.Snowplow.AutoPatrolEnabled;
+                Invalidate();
+                return;
+            }
 
             // Action Buttons
             if (_btnChristmasRect.Contains(pt))
             {
                 OpenChristmasDecor();
+                return;
+            }
+            if (_btnSnowplowRect.Contains(pt))
+            {
+                if (_overlay.Particles.CurrentEffect != EffectType.Snow)
+                {
+                    _trayManager.SetEffect(EffectType.Snow);
+                }
+                _overlay.IsPaused = false;
+                _overlay.Particles.EnableWindowPhysics = true;
+                _overlay.Particles.SummonSnowplow();
+                Invalidate();
                 return;
             }
             if (_btnApplyWallRect.Contains(pt))
